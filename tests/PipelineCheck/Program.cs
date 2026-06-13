@@ -1,39 +1,35 @@
 using EKSchemaDiff.Core.Splitting;
 using EKSchemaDiff.Report;
 
-// 離線驗證切分器與 HTML 報告（不需連線資料庫）。
-// 模擬 DacFx GenerateScript() 風格的部署腳本：含 SET 標頭、PRINT 進度、資料表 ALTER、
-// 描述 sp_addextendedproperty、Procedure ALTER；刻意不含 GRANT/DENY 以驗證權限已被忽略。
+// 離線驗證「逐物件腳本整理器」與 HTML 報告（不需連線資料庫）。
+// 模擬 DacFx 對「單一物件」GenerateScript() 的輸出：含 SQLCMD 部署樣板（:setvar / :on error）、
+// SQLCMD 模式偵測、PRINT 進度、USE [$(DatabaseName)]、資料表 ALTER、描述 sp_addextendedproperty。
+// BuildObjectFile 應：去掉樣板與 PRINT、改套乾淨 USE+SET 標頭、保留 ALTER 與描述、命名為 ALTER_TABLE、驗證通過。
 
-const string synthetic = """
+const string singleObject = """
 /*
-Deployment script for Sample_DB_PROD
+Deployment script for App
 */
 GO
 SET ANSI_NULLS, ANSI_PADDING, ANSI_WARNINGS, ARITHABORT, CONCAT_NULL_YIELDS_NULL, QUOTED_IDENTIFIER ON;
 SET NUMERIC_ROUNDABORT OFF;
 GO
-USE [Sample_DB_PROD];
+:setvar DatabaseName "App"
+:on error exit
 GO
-PRINT N'正在變更 [dbo].[DemoTable]...';
+IF N'$(__IsSqlCmdEnabled)' NOT LIKE N'True'
+    BEGIN
+        PRINT N'必須啟用 SQLCMD 模式才能成功執行此指令碼。';
+        SET NOEXEC ON;
+    END
+GO
+USE [$(DatabaseName)];
+GO
+PRINT N'正在改變 資料表 [dbo].[DemoTable]...';
 GO
 ALTER TABLE [dbo].[DemoTable] ADD [DemoFlag] INT NULL;
 GO
-PRINT N'正在建立 [dbo].[DemoTable].[DemoFlag] 的描述...';
-GO
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'示範說明', @level0type = N'SCHEMA', @level0name = N'dbo', @level1type = N'TABLE', @level1name = N'DemoTable', @level2type = N'COLUMN', @level2name = N'DemoFlag';
-GO
-PRINT N'正在變更 [dbo].[uspGetDemoTable]...';
-GO
-ALTER PROCEDURE [dbo].[uspGetDemoTable]
-AS
-    SELECT DemoId, Status, DemoFlag FROM dbo.DemoTable;
-GO
-PRINT N'正在刷新相依模組...';
-GO
-EXEC sp_refreshsqlmodule N'[dbo].[vwDemoTableSummary]';
-GO
-EXEC sp_refreshsqlmodule N'[dbo].[vwDemoTableDetail]';
 GO
 """;
 
@@ -42,24 +38,26 @@ var outDir = Path.Combine(Path.GetTempPath(), "eksd-pipelinecheck");
 if (Directory.Exists(outDir)) Directory.Delete(outDir, true);
 Directory.CreateDirectory(outDir);
 
-// 1) 切分
-var split = ScriptSplitter.Split(synthetic, "Sample_DB_PROD");
-Console.WriteLine("=== 切分結果 ===");
-foreach (var f in split.Files)
-    Console.WriteLine($"  {f.FileName}  [{f.Action} {f.ObjectType} {f.ObjectName}]");
-Console.WriteLine($"嚴格驗證：{(split.VerificationPassed ? "通過" : "未過：" + split.VerificationMessage)}");
+// 1) 逐物件整理（USE 覆寫成 App_PROD，模擬 deployDatabaseName）
+var f = ScriptSplitter.BuildObjectFile(singleObject, "App_PROD", "[dbo].[DemoTable]");
+Console.WriteLine("=== 逐物件整理結果 ===");
+Console.WriteLine($"  檔名：{f.FileName}");
+Console.WriteLine($"  動作/類型/名稱：{f.Action} / {f.ObjectType} / {f.ObjectName}");
+Console.WriteLine($"  操作批次數：{f.OperationBatchCount}");
+Console.WriteLine($"  驗證：{(f.VerificationPassed ? "通過" : "未過：" + f.VerificationMessage)}");
+File.WriteAllText(Path.Combine(outDir, f.FileName), f.Content, new System.Text.UTF8Encoding(true));
 
-bool hasPerm = System.Text.RegularExpressions.Regex.IsMatch(
-    synthetic, @"(?im)^\s*(GRANT|DENY|REVOKE)\b");
-Console.WriteLine($"權限語句：{(hasPerm ? "有（不預期）" : "無（正確）")}");
+bool usesOverrideDb = f.Content.Contains("USE [App_PROD]") && !f.Content.Contains("$(DatabaseName)");
+bool keptAlter = f.Content.Contains("ALTER TABLE [dbo].[DemoTable]");
+bool keptDesc = f.Content.Contains("sp_addextendedproperty") && f.Content.Contains("DemoFlag");
+bool strippedSqlCmd = !f.Content.Contains(":setvar") && !f.Content.Contains(":on error") && !f.Content.Contains("NOEXEC");
+bool strippedPrint = !f.Content.Contains("PRINT N'正在改變");
+bool namedAlterTable = f.FileName.Contains("ALTER_TABLE") && f.FileName.Contains("DemoTable");
+bool hasPerm = System.Text.RegularExpressions.Regex.IsMatch(f.Content, @"(?im)^\s*(GRANT|DENY|REVOKE)\b");
 
-foreach (var f in split.Files)
-{
-    var p = Path.Combine(outDir, f.FileName);
-    File.WriteAllText(p, f.Content, new System.Text.UTF8Encoding(true));
-}
+Console.WriteLine($"  USE 覆寫={usesOverrideDb}；保留ALTER={keptAlter}；保留描述={keptDesc}；去SQLCMD={strippedSqlCmd}；去PRINT={strippedPrint}；命名={namedAlterTable}；含權限={hasPerm}");
 
-// 2) 資料表差異 HTML（這是現行流程做不到的核心）
+// 2) 資料表差異 HTML（現行 PS1 流程做不到的核心）
 const string oldTable = """
 CREATE TABLE [dbo].[DemoTable] (
     [DemoId] INT NOT NULL,
@@ -75,11 +73,52 @@ CREATE TABLE [dbo].[DemoTable] (
 """;
 var (html, diffCount) = HtmlReportBuilder.BuildObjectReport(
     "[dbo].[DemoTable]", "變更", newTable, oldTable, false, new DateTime(2026, 6, 13, 10, 0, 0));
-var htmlPath = Path.Combine(outDir, "table_diff.html");
-File.WriteAllText(htmlPath, html, new System.Text.UTF8Encoding(true));
-Console.WriteLine("\n=== 資料表差異 HTML ===");
-Console.WriteLine($"  差異列數：{diffCount}（含逗號變更 + 新增 DemoFlag 欄位）");
-Console.WriteLine($"  輸出：{htmlPath}");
+File.WriteAllText(Path.Combine(outDir, "table_diff.html"), html, new System.Text.UTF8Encoding(true));
+Console.WriteLine($"\n=== 資料表差異 HTML ===  差異列數：{diffCount}");
+
+// 2.5) 完整部署腳本清理（CleanFullScript）：應去 SQLCMD 樣板、註解標頭、PRINT，
+//      改套單一 USE [部署庫] 開頭，保留所有 ALTER / sp_refreshsqlmodule / 描述批次與其順序。
+const string fullScript = """
+/*
+Sample_DB_PROD 的部署指令碼
+此程式碼是由工具所產生。
+*/
+GO
+SET ANSI_NULLS, ANSI_PADDING, ANSI_WARNINGS, ARITHABORT, CONCAT_NULL_YIELDS_NULL, QUOTED_IDENTIFIER ON;
+SET NUMERIC_ROUNDABORT OFF;
+GO
+:setvar DatabaseName "Sample_DB_PROD"
+:on error exit
+GO
+IF N'$(__IsSqlCmdEnabled)' NOT LIKE N'True'
+    BEGIN
+        PRINT N'必須啟用 SQLCMD 模式才能成功執行此指令碼。';
+        SET NOEXEC ON;
+    END
+GO
+USE [$(DatabaseName)];
+GO
+PRINT N'正在改變 資料表 [dbo].[DemoForm]...';
+GO
+ALTER TABLE [dbo].[DemoForm] ADD [TEST] VARCHAR (50) CONSTRAINT [DF_DemoForm_TEST] DEFAULT ('') NOT NULL;
+GO
+PRINT N'正在重新整理 檢視表 [dbo].[vwDemoQuery01]...';
+GO
+EXECUTE sp_refreshsqlmodule N'[dbo].[vwDemoQuery01]';
+GO
+""";
+
+var cleanedFull = ScriptSplitter.CleanFullScript(fullScript, "Sample_DB_PROD");
+File.WriteAllText(Path.Combine(outDir, "FullScript.sql"), cleanedFull, new System.Text.UTF8Encoding(true));
+bool fullStartsWithUse = cleanedFull.TrimStart().StartsWith("USE [Sample_DB_PROD];", StringComparison.Ordinal);
+bool fullNoSqlCmd = !cleanedFull.Contains(":setvar") && !cleanedFull.Contains(":on error")
+                    && !cleanedFull.Contains("$(DatabaseName)") && !cleanedFull.Contains("NOEXEC");
+bool fullNoPrint = !cleanedFull.Contains("PRINT N'正在");
+bool fullKeptOps = cleanedFull.Contains("ALTER TABLE [dbo].[DemoForm]")
+                   && cleanedFull.Contains("sp_refreshsqlmodule N'[dbo].[vwDemoQuery01]'");
+bool fullNoComment = !cleanedFull.Contains("此程式碼是由工具所產生");
+Console.WriteLine($"\n=== 完整腳本清理 CleanFullScript ===");
+Console.WriteLine($"  USE開頭={fullStartsWithUse}；去SQLCMD={fullNoSqlCmd}；去PRINT={fullNoPrint}；保留操作={fullKeptOps}；去註解標頭={fullNoComment}");
 
 // 3) 總覽
 var overview = HtmlReportBuilder.BuildOverview(
@@ -93,16 +132,8 @@ File.WriteAllText(Path.Combine(outDir, "00_總覽.html"), overview, new System.T
 
 Console.WriteLine($"\n所有輸出：{outDir}");
 
-// 依物件分組後：DemoTable 的 ALTER TABLE 與其 DemoFlag 描述合併成同一檔 →
-// 預期 3 檔：ALTER TABLE DemoTable（含描述）/ ALTER PROCEDURE uspGetDemoTable / 合併的 REFRESH。
-int expectedFiles = 3;
-var customerFile = split.Files.FirstOrDefault(f => f.ObjectType == "TABLE" && f.ObjectName.Contains("DemoTable"));
-bool tableMergedDesc = customerFile is not null
-    && customerFile.Content.Contains("sp_addextendedproperty")
-    && customerFile.Content.Contains("DemoFlag");
-var refreshFiles = split.Files.Where(f => f.ObjectType == "SQLMODULE").ToList();
-bool refreshGrouped = refreshFiles.Count == 1 && refreshFiles[0].FileName.Contains("2_OBJECTS");
-bool ok = split.VerificationPassed && split.Files.Count == expectedFiles && diffCount >= 1
-          && !hasPerm && tableMergedDesc && refreshGrouped;
-Console.WriteLine($"\n整體：{(ok ? "PASS" : "FAIL")}（切分檔數={split.Files.Count}，預期={expectedFiles}；描述併入資料表檔={tableMergedDesc}；refresh 合併={refreshGrouped}）");
+bool ok = f.VerificationPassed && usesOverrideDb && keptAlter && keptDesc
+          && strippedSqlCmd && strippedPrint && namedAlterTable && !hasPerm && diffCount >= 1
+          && fullStartsWithUse && fullNoSqlCmd && fullNoPrint && fullKeptOps && fullNoComment;
+Console.WriteLine($"\n整體：{(ok ? "PASS" : "FAIL")}");
 return ok ? 0 : 1;

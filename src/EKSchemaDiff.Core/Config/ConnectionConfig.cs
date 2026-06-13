@@ -44,15 +44,18 @@ public sealed class ConnectionConfig
     [JsonIgnore]
     public bool IsSqlAuth => string.Equals(Auth, "sql", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>把 ConnectionString（展開 ${env:VAR} 後）解析成 builder；未提供時回傳 null。</summary>
+    private SqlConnectionStringBuilder? ParseConnectionString() =>
+        string.IsNullOrWhiteSpace(ConnectionString)
+            ? null
+            : new SqlConnectionStringBuilder(EnvInterpolation.Expand(ConnectionString!));
+
     /// <summary>取得目標資料庫名稱（供 DacFx 部署腳本標頭使用）。</summary>
     public string ResolveDatabaseName()
     {
         if (!string.IsNullOrWhiteSpace(Database)) return Database!;
-        if (!string.IsNullOrWhiteSpace(ConnectionString))
-        {
-            var b = new SqlConnectionStringBuilder(EnvInterpolation.Expand(ConnectionString!));
-            if (!string.IsNullOrWhiteSpace(b.InitialCatalog)) return b.InitialCatalog;
-        }
+        var b = ParseConnectionString();
+        if (b is not null && !string.IsNullOrWhiteSpace(b.InitialCatalog)) return b.InitialCatalog;
         return string.Empty;
     }
 
@@ -62,9 +65,9 @@ public sealed class ConnectionConfig
     public string BuildConnectionString(Func<string, string>? passwordPrompt = null)
     {
         SqlConnectionStringBuilder builder;
-        if (!string.IsNullOrWhiteSpace(ConnectionString))
+        if (ParseConnectionString() is { } fromString)
         {
-            builder = new SqlConnectionStringBuilder(EnvInterpolation.Expand(ConnectionString!));
+            builder = fromString;
         }
         else
         {
@@ -107,9 +110,7 @@ public sealed class ConnectionConfig
         var db = ResolveDatabaseName();
         var srv = !string.IsNullOrWhiteSpace(Server)
             ? Server
-            : (!string.IsNullOrWhiteSpace(ConnectionString)
-                ? new SqlConnectionStringBuilder(EnvInterpolation.Expand(ConnectionString!)).DataSource
-                : "?");
+            : (ParseConnectionString()?.DataSource ?? "?");
         var auth = IsSqlAuth ? $"sql:{User}" : "integrated";
         return $"{srv} / {db} ({auth})";
     }

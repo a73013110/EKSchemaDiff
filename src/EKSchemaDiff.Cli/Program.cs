@@ -1,8 +1,11 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using EKSchemaDiff.Cli.Commands;
+using EKSchemaDiff.Core.Diagnostics;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
+Log.Init();
 EnableVirtualTerminal();
 
 var app = new CommandApp<HomeCommand>();
@@ -23,7 +26,28 @@ app.Configure(config =>
         .WithDescription("列出已發現的 profile");
 });
 
-return app.Run(args);
+try
+{
+    Log.Info($"執行命令列：eksd {string.Join(' ', args)}");
+    int code = app.Run(args);
+    Log.Info($"命令結束，結束碼 {code}");
+    return code;
+}
+catch (Exception ex)
+{
+    // 任何冒泡到最頂層的例外都要留下完整記錄，並提示使用者 log 位置（避免視窗一閃就關、不知原因）。
+    Log.Error("頂層未處理例外，程式即將終止", ex);
+    try
+    {
+        AnsiConsole.MarkupLineInterpolated($"[red]發生未預期錯誤：{ex.Message}[/]");
+        if (Log.FilePath is not null)
+            AnsiConsole.MarkupLineInterpolated($"[grey]詳細記錄已寫入：{Log.FilePath}[/]");
+        AnsiConsole.MarkupLine("[grey]按 Enter 結束…[/]");
+        if (!Console.IsInputRedirected) Console.ReadLine();
+    }
+    catch { /* 連終端輸出都失敗時，至少 log 已寫入 */ }
+    return 70; // EX_SOFTWARE
+}
 
 // 在 Windows 主控台啟用 VT（ENABLE_VIRTUAL_TERMINAL_PROCESSING）並設 UTF-8，
 // 讓自繪畫面用的 ESC[H/ESC[K/ESC[0J 控制碼與中文都能正確輸出。

@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.SqlServer.Dac.Compare;
 using Microsoft.SqlServer.Dac.Model;
 
@@ -52,11 +53,44 @@ public sealed class ObjectDifference
         get => _diff.Included;
     }
 
-    /// <summary>來源物件腳本（更版內容）。取不到時為空字串。</summary>
-    public string SourceScript => TryScript(_diff.SourceObject);
+    /// <summary>
+    /// 來源物件腳本（更版內容）。含本體 + 子差異（如欄位描述 MS_Description 等擴充屬性）腳本，
+    /// 讓差異報告能顯示描述異動。取不到時為空字串。
+    /// </summary>
+    public string SourceScript => BuildScript(d => d.SourceObject);
 
-    /// <summary>目標物件腳本（原版內容）。取不到時為空字串。</summary>
-    public string TargetScript => TryScript(_diff.TargetObject);
+    /// <summary>目標物件腳本（原版內容）。含本體 + 子差異腳本。取不到時為空字串。</summary>
+    public string TargetScript => BuildScript(d => d.TargetObject);
+
+    /// <summary>
+    /// 組合一側的腳本：物件本體 + 所有子差異（遞迴）的腳本。
+    /// DacFx 把表/欄位的描述（擴充屬性）視為子差異，本體 script 不含描述，
+    /// 故需把子差異腳本一併帶出，差異報告才看得到 sp_addextendedproperty/sp_updateextendedproperty 之類異動。
+    /// </summary>
+    private string BuildScript(Func<SchemaDifference, TSqlObject?> pick)
+    {
+        var sb = new StringBuilder();
+        Append(_diff, pick, sb);
+        return sb.ToString().TrimEnd();
+    }
+
+    private static void Append(SchemaDifference diff, Func<SchemaDifference, TSqlObject?> pick, StringBuilder sb)
+    {
+        var script = TryScript(pick(diff));
+        if (!string.IsNullOrWhiteSpace(script))
+        {
+            if (sb.Length > 0) sb.Append("\n\n");
+            sb.Append(script.TrimEnd());
+        }
+        foreach (var child in SafeChildren(diff))
+            Append(child, pick, sb);
+    }
+
+    private static IEnumerable<SchemaDifference> SafeChildren(SchemaDifference diff)
+    {
+        try { return diff.Children ?? Enumerable.Empty<SchemaDifference>(); }
+        catch { return Enumerable.Empty<SchemaDifference>(); }
+    }
 
     private static string TryScript(TSqlObject? obj)
     {

@@ -35,7 +35,7 @@ public sealed class ConfigCommand : Command<ConfigSettings>
 
         var profile = settings.Profile is not null
             ? config.FindProfile(settings.Profile) ?? throw new InvalidOperationException($"找不到 profile：{settings.Profile}")
-            : (config.Profiles.Count == 1 ? config.Profiles[0] : Prompts.PickProfile(config.Profiles));
+            : Prompts.PickProfile(config.Profiles);
 
         SettingsEditor.Edit(profile);
 

@@ -1,7 +1,10 @@
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 using EKSchemaDiff.Cli.Tui;
 using EKSchemaDiff.Core.Compare;
 using EKSchemaDiff.Core.Config;
+using EKSchemaDiff.Core.Diagnostics;
 using EKSchemaDiff.Core.Export;
 using Spectre.Console;
 
@@ -14,6 +17,7 @@ public static class CompareWorkflow
         ConfigStore store, Profile profile,
         string? outOverride, DeployScriptMode? exportOverride, bool interactive)
     {
+        Log.Step($"開始比對流程 profile='{profile.Name}' interactive={interactive}");
         ShowProfileSummary(profile);
 
         CompareSession? session = null;
@@ -27,6 +31,7 @@ public static class CompareWorkflow
         }
         catch (Exception ex)
         {
+            Log.Error("比對階段失敗", ex);
             AnsiConsole.MarkupLineInterpolated($"[red]比對失敗：{ex.Message}[/]");
             return 2;
         }
@@ -48,13 +53,16 @@ public static class CompareWorkflow
             return 0;
         }
 
+        Log.Step($"比對完成，差異 {session.Differences.Count} 項");
         ShowDiffOverview(session);
 
         var exportMode = exportOverride ?? profile.ExportOptions.DeployScript;
 
         if (interactive)
         {
+            Log.Step("進入勾選預覽畫面 ReviewScreen");
             var included = ReviewScreen.Run(session.Differences, profile.ExportOptions.HtmlIgnoreWhitespace);
+            Log.Step($"離開勾選預覽畫面，結果={(included is null ? "取消" : included.Count + " 項")}");
             if (included is null)
             {
                 AnsiConsole.MarkupLine("[yellow]已取消，未匯出。[/]");
@@ -66,30 +74,40 @@ public static class CompareWorkflow
                 AnsiConsole.MarkupLine("[yellow]未勾選任何物件，已取消匯出。[/]");
                 return 0;
             }
-            if (exportOverride is null)
-                exportMode = Prompts.SelectExportMode(exportMode);
+            // 輸出形式一律沿用設定頁的設定（不再每次詢問，否則設定形同虛設）。
+            // 需臨時改變時，用 compare --export single|split|both。
         }
 
         profile.ExportOptions.DeployScript = exportMode;
         var outputDir = ResolveOutputDir(store, profile, outOverride);
+        Log.Step($"開始匯出 mode={exportMode} outputDir='{outputDir}'");
 
         ExportSummary summary;
         try
         {
-            ExportSummary? captured = null;
-            AnsiConsole.Status().Spinner(Spinner.Known.Dots)
-                .Start("正在產生部署 SQL 與差異報告…", _ =>
+            if (interactive)
+            {
+                var (captured, cancelled) = RunExportWithProgress(session!, outputDir);
+                if (cancelled || captured is null)
                 {
-                    captured = Exporter.Export(session!, outputDir, DateTime.Now);
-                });
-            summary = captured!;
+                    AnsiConsole.MarkupLine("[yellow]已中斷匯出（部分檔案可能已寫出）。[/]");
+                    return 0;
+                }
+                summary = captured;
+            }
+            else
+            {
+                summary = Exporter.Export(session!, outputDir, DateTime.Now);
+            }
         }
         catch (Exception ex)
         {
+            Log.Error("匯出階段失敗", ex);
             AnsiConsole.MarkupLineInterpolated($"[red]匯出失敗：{ex.Message}[/]");
             return 3;
         }
 
+        Log.Step($"匯出完成，HTML {summary.HtmlReportCount} 份、切分檔 {summary.SplitFileCount} 個");
         ShowExportSummary(summary);
 
         if (interactive && summary.HtmlReportCount > 0)
@@ -100,6 +118,121 @@ public static class CompareWorkflow
         }
 
         return summary.SplitVerificationPassed ? 0 : 4;
+    }
+
+    /// <summary>
+    /// 在背景執行匯出，前景以自繪畫面顯示進度（含大 Logo），可按 Esc 中斷。
+    /// 回傳 (摘要, 是否中斷)。中斷時摘要為 null。
+    /// </summary>
+    private static (ExportSummary? Summary, bool Cancelled) RunExportWithProgress(
+        CompareSession session, string outputDir)
+    {
+        using var cts = new CancellationTokenSource();
+        var gate = new object();
+        var cur = new ExportProgress("準備中", "", 0, 0);
+        var history = new List<string>();   // 依序記錄處理過的項目（去除連續重複）
+        void Report(ExportProgress p)
+        {
+            lock (gate)
+            {
+                cur = p;
+                if (!string.IsNullOrWhiteSpace(p.Item) && (history.Count == 0 || history[^1] != p.Item))
+                    history.Add(p.Item);
+            }
+        }
+
+        ExportSummary? summary = null;
+        Exception? error = null;
+        var task = Task.Run(() =>
+        {
+            try { summary = Exporter.Export(session, outputDir, DateTime.Now, Report, cts.Token); }
+            catch (OperationCanceledException) { /* 使用者中斷 */ }
+            catch (Exception ex) { error = ex; }
+        });
+
+        try
+        {
+            Console.CursorVisible = false;
+            int tick = 0;
+            while (!task.IsCompleted)
+            {
+                ExportProgress snap; List<string> hist;
+                lock (gate) { snap = cur; hist = new List<string>(history); }
+                RenderExportFrame(snap, cts.IsCancellationRequested, tick, hist, done: false);
+                if (Console.KeyAvailable && Console.ReadKey(intercept: true).Key == ConsoleKey.Escape)
+                    cts.Cancel();
+                Thread.Sleep(80);
+                tick++;
+            }
+            ExportProgress last; List<string> lastHist;
+            lock (gate) { last = cur; lastHist = new List<string>(history); }
+            RenderExportFrame(last, cts.IsCancellationRequested, tick, lastHist, done: !cts.IsCancellationRequested);
+        }
+        finally
+        {
+            Console.CursorVisible = true;
+        }
+
+        task.Wait();
+        if (error is not null) throw error;
+        return (summary, cts.IsCancellationRequested);
+    }
+
+    private static readonly string[] SpinnerFrames =
+        { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" };
+
+    private static void RenderExportFrame(
+        ExportProgress p, bool cancelling, int tick, IReadOnlyList<string> history, bool done)
+    {
+        ConsoleUi.BeginFrame();
+        Banner.Show();
+
+        string spin = done ? "[green]✔[/]" : $"[orange3]{SpinnerFrames[tick % SpinnerFrames.Length]}[/]";
+        ConsoleUi.Line($"{spin} [orange3]產出進度[/]　[grey39]Esc 中斷[/]");
+        ConsoleUi.Line();
+
+        int total = Math.Max(1, p.Total);
+        int current = Math.Clamp(p.Current, 0, total);
+        int barWidth = Math.Clamp(ConsoleUi.Width - 26, 10, 60);
+        int filled = (int)Math.Round((double)current / total * barWidth);
+        filled = Math.Clamp(filled, 0, barWidth);
+
+        // 進度條：已完成段用實心；未完成段放一個來回跑動的指示點，即使卡在大物件也看得出在動。
+        var empty = new System.Text.StringBuilder(new string('░', Math.Max(0, barWidth - filled)));
+        if (!done && empty.Length > 0)
+        {
+            int span = empty.Length;
+            int pos = tick % (span * 2);
+            if (pos >= span) pos = span * 2 - 1 - pos;   // 來回反彈
+            empty[Math.Clamp(pos, 0, span - 1)] = '▒';
+        }
+        var bar = $"[green]{new string('█', filled)}[/][grey39]{empty}[/]";
+        int pct = (int)Math.Round((double)current / total * 100);
+        ConsoleUi.Line($"{bar}  [bold]{current}/{total}[/] [grey]({pct}%)[/]");
+        ConsoleUi.Line();
+
+        ConsoleUi.Line($"[grey]階段：[/]{ConsoleUi.Esc(p.Phase)}");
+        if (!done && !string.IsNullOrWhiteSpace(p.Item))
+            ConsoleUi.Line($"{spin} [grey]處理中：[/]{ConsoleUi.Esc(p.Item)}");
+
+        // 已處理清單：顯示最近數筆，最後一筆若仍在處理中則不標完成。
+        int avail = Math.Max(3, ConsoleUi.Height - 14);
+        int inProgressTail = done ? 0 : 1;   // 最後一筆通常是進行中那筆
+        int completedCount = Math.Max(0, history.Count - inProgressTail);
+        if (completedCount > 0)
+        {
+            ConsoleUi.Line();
+            ConsoleUi.Line($"[grey39]── 已處理 {completedCount} 項 ──[/]");
+            int show = Math.Min(avail, completedCount);
+            for (int i = completedCount - show; i < completedCount; i++)
+                ConsoleUi.Line($"  [green]✓[/] [grey]{ConsoleUi.Esc(history[i])}[/]");
+            if (completedCount > show)
+                ConsoleUi.Line($"  [grey39]…（前 {completedCount - show} 項略）[/]");
+        }
+
+        if (cancelling)
+            ConsoleUi.Line("[yellow]正在中斷…[/]");
+        ConsoleUi.EndFrame();
     }
 
     private static void ShowProfileSummary(Profile profile)
@@ -152,9 +285,9 @@ public static class CompareWorkflow
         if (summary.SplitFileCount > 0)
         {
             var v = summary.SplitVerificationPassed
-                ? "[green]嚴格驗證通過[/]"
+                ? "[green]整理驗證通過[/]"
                 : $"[red]驗證未過：{Markup.Escape(summary.SplitVerificationMessage ?? "")}[/]";
-            table.AddRow("依序切分檔", $"{summary.SplitFileCount} 個　{v}");
+            table.AddRow("逐物件部署檔", $"{summary.SplitFileCount} 個　{v}");
         }
         if (summary.HtmlReportCount > 0)
             table.AddRow("差異 HTML", $"{summary.HtmlReportCount} 份 + 總覽");

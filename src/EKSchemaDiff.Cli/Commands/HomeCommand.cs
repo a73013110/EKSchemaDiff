@@ -1,5 +1,6 @@
 using EKSchemaDiff.Cli.Tui;
 using EKSchemaDiff.Core.Config;
+using EKSchemaDiff.Core.Diagnostics;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -56,25 +57,48 @@ public sealed class HomeCommand : Command<RunSettings>
             switch (pick)
             {
                 case 0: // 開始比對
-                    DoCompare(store, settings);
+                    Guard("開始比對", () => DoCompare(store, settings));
                     break;
                 case 1: // 設定選項
-                    DoSettings(store);
+                    Guard("設定選項", () => DoSettings(store));
                     break;
                 case 2: // 新增/編輯連線
-                    ProfileEditor.GuidedSetup(store);
-                    Pause();
+                    Guard("新增/編輯連線", () => { ProfileEditor.GuidedSetup(store); Pause(); });
                     break;
                 case 3: // 列出 profile
-                    ListProfiles(store);
-                    Pause();
+                    Guard("列出 profile", () => { ListProfiles(store); Pause(); });
                     break;
                 case 4: // 離開
                 case -1:
                     AnsiConsole.Clear();
                     AnsiConsole.MarkupLine("[grey]再見。[/]");
+                    Log.Info("使用者由主選單離開");
                     return 0;
             }
+        }
+    }
+
+    /// <summary>
+    /// 執行一個主選單動作；攔截任何例外、寫入 log 並提示，然後回到主選單而非讓整個程式關閉。
+    /// 這是「比對後 Enter 程式整個關掉」這類問題的保險：就算動作內部崩潰，使用者仍留在選單且看得到原因。
+    /// </summary>
+    private static void Guard(string action, Action body)
+    {
+        Log.Step($"進入動作：{action}");
+        try
+        {
+            body();
+            Log.Step($"完成動作：{action}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"動作「{action}」發生未處理例外", ex);
+            try { Console.CursorVisible = true; } catch { }
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLineInterpolated($"[red]「{Markup.Escape(action)}」發生錯誤：{Markup.Escape(ex.Message)}[/]");
+            if (Log.FilePath is not null)
+                AnsiConsole.MarkupLineInterpolated($"[grey]完整堆疊已寫入記錄檔：{Markup.Escape(Log.FilePath)}[/]");
+            Pause();
         }
     }
 
@@ -87,9 +111,7 @@ public sealed class HomeCommand : Command<RunSettings>
             return;
         }
 
-        var profile = store.Effective.Profiles.Count == 1
-            ? store.Effective.Profiles[0]
-            : Prompts.PickProfile(store.Effective.Profiles);
+        var profile = Prompts.PickProfile(store.Effective.Profiles);
 
         CompareWorkflow.Run(store, profile, settings.Out, null, interactive: true);
         Pause();
@@ -107,9 +129,7 @@ public sealed class HomeCommand : Command<RunSettings>
             return;
         }
 
-        var profile = config.Profiles.Count == 1
-            ? config.Profiles[0]
-            : Prompts.PickProfile(config.Profiles);
+        var profile = Prompts.PickProfile(config.Profiles);
 
         SettingsEditor.Edit(profile);
         var path = useGlobal ? store.SaveGlobal(config) : store.SaveProject(config);
@@ -124,23 +144,7 @@ public sealed class HomeCommand : Command<RunSettings>
         AnsiConsole.MarkupLineInterpolated($"[grey]全域設定：{store.GlobalConfigPath}[/]");
         if (store.Effective.Profiles.Count == 0) { AnsiConsole.MarkupLine("[yellow](尚無 profile)[/]"); return; }
 
-        var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey39);
-        table.AddColumn("Profile");
-        table.AddColumn("來源（更版）");
-        table.AddColumn("目標（原版）");
-        table.AddColumn("忽略權限");
-        table.AddColumn("輸出");
-        foreach (var p in store.Effective.Profiles)
-        {
-            var isDefault = string.Equals(p.Name, store.Effective.DefaultProfile, StringComparison.OrdinalIgnoreCase);
-            table.AddRow(
-                isDefault ? $"[bold]{Markup.Escape(p.Name)}[/] [grey](預設)[/]" : Markup.Escape(p.Name),
-                Markup.Escape(p.Source.ToSafeDisplay()),
-                Markup.Escape(p.Target.ToSafeDisplay()),
-                p.CompareOptions.IgnorePermissions ? "[green]是[/]" : "[red]否[/]",
-                p.ExportOptions.DeployScript.ToString());
-        }
-        AnsiConsole.Write(table);
+        AnsiConsole.Write(ProfileTable.Build(store.Effective.Profiles, store.Effective.DefaultProfile));
     }
 
     private static void Pause()

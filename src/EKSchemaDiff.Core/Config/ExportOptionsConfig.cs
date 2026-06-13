@@ -36,16 +36,11 @@ public sealed class ExportOptionsConfig
     [JsonPropertyName("deployDatabaseName")]
     public string? DeployDatabaseName { get; set; }
 
-    /// <summary>是否將同一物件的多個批次（例如資料表 DDL 與其描述）合併到同一個切分檔。</summary>
-    [JsonPropertyName("groupSplitByObject")]
-    public bool GroupSplitByObject { get; set; } = true;
-
     public ExportOptionsConfig Clone() => new()
     {
         DeployScript = DeployScript,
         ExportHtml = ExportHtml,
         HtmlIgnoreWhitespace = HtmlIgnoreWhitespace,
         DeployDatabaseName = DeployDatabaseName,
-        GroupSplitByObject = GroupSplitByObject,
     };
 }

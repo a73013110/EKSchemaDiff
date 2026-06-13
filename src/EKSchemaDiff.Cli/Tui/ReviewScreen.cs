@@ -1,4 +1,5 @@
 using EKSchemaDiff.Core.Compare;
+using EKSchemaDiff.Core.Diagnostics;
 using EKSchemaDiff.Report;
 using Spectre.Console;
 
@@ -34,7 +35,18 @@ public static class ReviewScreen
             Console.CursorVisible = false;
             while (true)
             {
-                Render(ordered, included, cursor, ignoreWhitespace);
+                try
+                {
+                    Render(ordered, included, cursor, ignoreWhitespace);
+                }
+                catch (Exception ex)
+                {
+                    // 預覽/差異繪製若失敗，記錄並跳過該格重繪，避免整個畫面崩潰把程式帶掉。
+                    Log.Error($"ReviewScreen 重繪失敗（cursor={cursor}）", ex);
+                    ConsoleUi.BeginFrame();
+                    ConsoleUi.Line("[red]預覽繪製發生錯誤，已略過此格。詳見記錄檔。[/]");
+                    ConsoleUi.EndFrame();
+                }
                 var key = Console.ReadKey(intercept: true);
                 switch (key.Key)
                 {
@@ -56,8 +68,10 @@ public static class ReviewScreen
                         for (int i = 0; i < included.Length; i++) included[i] = false;
                         break;
                     case ConsoleKey.Enter:
+                        var picked = Collect(ordered, included);
+                        Log.Step($"ReviewScreen 確認勾選 {picked.Count} 項");
                         AnsiConsole.Clear();
-                        return Collect(ordered, included);
+                        return picked;
                     case ConsoleKey.Escape:
                         AnsiConsole.Clear();
                         return null;
@@ -85,7 +99,7 @@ public static class ReviewScreen
         int h = ConsoleUi.Height;
         int chosen = included.Count(x => x);
 
-        ConsoleUi.Line("[orange3]勾選要納入此次部署的物件[/]　[grey39]↑↓ 移動 · 空白 勾選 · A 全選 · N 全不選 · Enter 確認 · Esc 取消[/]");
+        ConsoleUi.Line("[orange3]勾選要納入此次部署的物件[/]　[grey39]↑↓ 移動 · 空白 勾選 · A 全選 · N 全不選 · Enter 確認 · Esc 返回主選單[/]");
         ConsoleUi.Line($"已勾選 [green]{chosen}[/] / 共 {items.Count}");
         ConsoleUi.Line();
 

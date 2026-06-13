@@ -55,8 +55,11 @@ public sealed class CompareOptionsConfig
         "Permissions", "Users", "Logins", "RoleMembership", "Credentials"
     };
 
-    /// <summary>將設定套用到 DacFx 的 DacDeployOptions。</summary>
-    public void ApplyTo(DacDeployOptions options)
+    /// <summary>
+    /// 將設定套用到 DacFx 的 DacDeployOptions。
+    /// 設定中無法辨識的排除類型名稱會收集到 <paramref name="unrecognized"/>（傳入時）供警示。
+    /// </summary>
+    public void ApplyTo(DacDeployOptions options, List<string>? unrecognized = null)
     {
         options.IgnorePermissions = IgnorePermissions;
         options.DropPermissionsNotInSource = DropPermissionsNotInSource;
@@ -68,11 +71,11 @@ public sealed class CompareOptionsConfig
         options.IgnoreWhitespace = IgnoreWhitespace;
         options.IgnoreKeywordCasing = IgnoreKeywordCasing;
 
-        options.ExcludeObjectTypes = ResolveExcludedObjectTypes();
+        options.ExcludeObjectTypes = ResolveExcludedObjectTypes(unrecognized);
     }
 
-    /// <summary>把字串清單轉成 DacFx ObjectType[]；無法辨識的名稱會回傳於 out 參數供警示。</summary>
-    public ObjectType[] ResolveExcludedObjectTypes(List<string>? unrecognized = null)
+    /// <summary>把字串清單轉成 DacFx ObjectType[]；無法辨識的名稱會加入 <paramref name="unrecognized"/> 供警示。</summary>
+    private ObjectType[] ResolveExcludedObjectTypes(List<string>? unrecognized = null)
     {
         var result = new List<ObjectType>();
         foreach (var name in ExcludedObjectTypes)

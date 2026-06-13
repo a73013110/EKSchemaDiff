@@ -28,24 +28,4 @@ public static class Prompts
                 .AddChoices(byLabel.Keys));
         return byLabel[picked];
     }
-
-    /// <summary>匯出前選擇部署 SQL 的輸出形式。</summary>
-    public static DeployScriptMode SelectExportMode(DeployScriptMode current)
-    {
-        var map = new Dictionary<string, DeployScriptMode>
-        {
-            ["單一完整檔 + 依序切分檔（建議）"] = DeployScriptMode.Both,
-            ["只要單一完整檔 FullScript.sql"] = DeployScriptMode.Single,
-            ["只要依序切分的個別檔"] = DeployScriptMode.SplitOrdered,
-        };
-        var defaultLabel = map.First(kv => kv.Value == current).Key;
-        var ordered = new List<string> { defaultLabel };
-        ordered.AddRange(map.Keys.Where(k => k != defaultLabel));
-
-        var pick = AnsiConsole.Prompt(
-            new SelectionPrompt<string>()
-                .Title("部署 SQL 要輸出哪一種？")
-                .AddChoices(ordered));
-        return map[pick];
-    }
 }

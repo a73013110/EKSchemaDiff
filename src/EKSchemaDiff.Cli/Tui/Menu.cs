@@ -40,13 +40,15 @@ public static class Menu
             return int.Parse(pick.Split(' ')[0]);
         }
 
-        int cursor = Math.Clamp(initial, 0, items.Count - 1);
+        int cursor = SkipSeparators(items, Math.Clamp(initial, 0, items.Count - 1), +1);
         try
         {
             Console.CursorVisible = false;
             while (true)
             {
                 items = itemsProvider();
+                if (cursor >= items.Count) cursor = items.Count - 1;
+                cursor = SkipSeparators(items, cursor, +1);
                 Render(title, footer, items, cursor, header);
 
                 var key = Console.ReadKey(intercept: true).Key;
@@ -54,11 +56,11 @@ public static class Menu
                 {
                     case ConsoleKey.UpArrow:
                     case ConsoleKey.K:
-                        cursor = (cursor - 1 + items.Count) % items.Count;
+                        cursor = Move(items, cursor, -1);
                         break;
                     case ConsoleKey.DownArrow:
                     case ConsoleKey.J:
-                        cursor = (cursor + 1) % items.Count;
+                        cursor = Move(items, cursor, +1);
                         break;
                     case ConsoleKey.Enter:
                         if (onActivate is null || !onActivate(cursor))
@@ -75,6 +77,24 @@ public static class Menu
         }
     }
 
+    /// <summary>往 dir 方向移動一格，並跳過分隔列（無可選項時原地不動）。</summary>
+    private static int Move(IReadOnlyList<MenuItem> items, int cursor, int dir)
+    {
+        for (int step = 0; step < items.Count; step++)
+        {
+            cursor = (cursor + dir + items.Count) % items.Count;
+            if (!items[cursor].IsSeparator) return cursor;
+        }
+        return cursor;
+    }
+
+    /// <summary>若目前落在分隔列，往 dir 方向找到第一個可選項。</summary>
+    private static int SkipSeparators(IReadOnlyList<MenuItem> items, int cursor, int dir)
+    {
+        if (cursor >= 0 && cursor < items.Count && !items[cursor].IsSeparator) return cursor;
+        return Move(items, cursor, dir);
+    }
+
     private static void Render(string title, string? footer, IReadOnlyList<MenuItem> items, int cursor, Action? header)
     {
         ConsoleUi.BeginFrame();
@@ -83,7 +103,9 @@ public static class Menu
         ConsoleUi.Line();
 
         int w = ConsoleUi.Width;
-        int visible = Math.Clamp(ConsoleUi.Height - 9, 4, items.Count);
+        // 可見列數：上限為終端高度可容納列數（至少 4），但不超過實際項目數。
+        // 注意不可用 Math.Clamp(x, 4, items.Count)：當項目數 < 4 時 min>max 會丟 ArgumentException。
+        int visible = Math.Min(items.Count, Math.Max(4, ConsoleUi.Height - 9));
         int top = ConsoleUi.ScrollTop(cursor, items.Count, visible);
 
         for (int i = top; i < Math.Min(items.Count, top + visible); i++)
@@ -91,7 +113,10 @@ public static class Menu
             var it = items[i];
             if (it.IsSeparator)
             {
-                ConsoleUi.Line("  [grey39]----------[/]");
+                // 有標題的分隔列當「分類標題」呈現；沒有就畫一條淡線。
+                ConsoleUi.Line(string.IsNullOrWhiteSpace(it.Label)
+                    ? "  [grey39]──────────[/]"
+                    : $"  {it.Label}");
                 continue;
             }
             if (i == cursor)
