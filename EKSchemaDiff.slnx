@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EKSchemaDiff.Cli/EKSchemaDiff.Cli.csproj" />
+    <Project Path="src/EKSchemaDiff.Core/EKSchemaDiff.Core.csproj" />
+    <Project Path="src/EKSchemaDiff.Report/EKSchemaDiff.Report.csproj" />
+  </Folder>
+</Solution>

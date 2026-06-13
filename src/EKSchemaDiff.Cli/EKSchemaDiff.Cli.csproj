@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\EKSchemaDiff.Core\EKSchemaDiff.Core.csproj" />
+    <ProjectReference Include="..\EKSchemaDiff.Report\EKSchemaDiff.Report.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console" Version="0.57.0" />
+    <PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>eksd</AssemblyName>
+    <RootNamespace>EKSchemaDiff.Cli</RootNamespace>
+    <Product>EKSchemaDiff</Product>
+    <Authors>Yikai</Authors>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+</Project>

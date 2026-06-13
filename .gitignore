@@ -55,3 +55,13 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# EKSchemaDiff 專屬
+publish/
+.smoketest/
+EKSchemaDiff輸出/
+# 本機實際設定檔可能含連線資訊；範例請放 samples/
+/.eksd.json
+/.vs
+*.pubxml.user
+*.csproj.user

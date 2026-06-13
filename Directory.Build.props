@@ -1,0 +1,7 @@
+<Project>
+  <!-- Release 發佈不產生 .pdb，讓散佈目錄乾淨。Debug 仍保留符號以利除錯。 -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+</Project>

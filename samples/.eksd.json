@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "defaultProfile": "uat2prod",
+  "profiles": [
+    {
+      "name": "uat2prod",
+      "description": "UAT → PROD。請依實際環境修改。",
+      "source": {
+        "label": "UAT 來源",
+        "server": "資料庫名稱位址(名稱/IP)",
+        "database": "資料庫名稱",
+        "auth": "integrated",
+        "trustServerCertificate": true
+      },
+      "target": {
+        "label": "PROD 目標",
+        "server": "資料庫名稱位址(名稱/IP)",
+        "database": "資料庫名稱",
+        "auth": "integrated",
+        "trustServerCertificate": true
+      },
+      "outputDir": "EKSchemaDiff輸出",
+      "compareOptions": {
+        "ignorePermissions": true,
+        "dropPermissionsNotInSource": false,
+        "ignoreRoleMembership": true,
+        "ignoreLoginSids": true,
+        "ignoreExtendedProperties": false,
+        "blockOnPossibleDataLoss": true,
+        "dropObjectsNotInSource": false,
+        "ignoreWhitespace": true,
+        "ignoreKeywordCasing": true,
+        "excludedObjectTypes": ["Permissions", "Users", "Logins", "RoleMembership", "Credentials"]
+      },
+      "exportOptions": {
+        "deployScript": "Both",
+        "exportHtml": true,
+        "htmlIgnoreWhitespace": false
+      }
+    },
+    {
+      "name": "dev2uat-sqlauth",
+      "description": "DEV → UAT，使用 SQL 驗證；密碼以環境變數帶入，勿放明碼。",
+      "source": {
+        "label": "DEV 來源",
+        "server": "資料庫名稱位址(名稱/IP)",
+        "database": "資料庫名稱",
+        "auth": "sql",
+        "user": "deploy",
+        "password": "${env:EKSD_DEV_PWD}",
+        "trustServerCertificate": true
+      },
+      "target": {
+        "label": "UAT 目標",
+        "server": "資料庫名稱位址(名稱/IP)",
+        "database": "資料庫名稱",
+        "auth": "sql",
+        "user": "deploy",
+        "password": "${env:EKSD_UAT_PWD}",
+        "trustServerCertificate": true
+      },
+      "outputDir": "EKSchemaDiff輸出",
+      "compareOptions": {
+        "ignorePermissions": true,
+        "excludedObjectTypes": ["Permissions", "Users", "Logins", "RoleMembership", "Credentials"]
+      },
+      "exportOptions": {
+        "deployScript": "Both",
+        "exportHtml": true,
+		"deployDatabaseName": null,
+        "htmlIgnoreWhitespace": false,
+        "groupSplitByObject": true
+      }
+    }
+  ]
+}
