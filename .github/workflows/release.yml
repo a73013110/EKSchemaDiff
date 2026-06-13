@@ -1,0 +1,43 @@
+name: release
+
+# 推送 v* 開頭的 tag（例如 v0.2.0）時，自動建置單檔 EXE 並發佈 GitHub Release。
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write          # action-gh-release 需要寫入 Release 的權限
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 關鍵：MinVer 需要完整 git 歷史與 tags 才能算出正確版號
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # 設定與 Properties/PublishProfiles/FolderProfile.pubxml 一致：
+      # win-x64、self-contained、單檔、原生 DLL 一併封裝。
+      - name: Publish (win-x64 single file)
+        run: >
+          dotnet publish src/EKSchemaDiff.Cli/EKSchemaDiff.Cli.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish
+
+      # 下載檔名帶上版號，使用者一眼看得出版本與平台。
+      - name: Stage artifact
+        run: Copy-Item publish/eksd.exe "eksd-${{ github.ref_name }}-win-x64.exe"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true   # 依 commit 自動產生變更摘要
+          files: eksd-${{ github.ref_name }}-win-x64.exe
