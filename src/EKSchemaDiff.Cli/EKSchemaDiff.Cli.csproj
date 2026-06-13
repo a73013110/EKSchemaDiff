@@ -6,6 +6,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="MinVer" Version="7.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Spectre.Console" Version="0.57.0" />
     <PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />
   </ItemGroup>
@@ -19,7 +23,6 @@
     <RootNamespace>EKSchemaDiff.Cli</RootNamespace>
     <Product>EKSchemaDiff</Product>
     <Authors>Yikai</Authors>
-    <Version>0.1.0</Version>
   </PropertyGroup>
 
 </Project>

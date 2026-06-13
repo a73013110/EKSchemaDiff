@@ -1,7 +1,19 @@
 <Project>
-  <!-- Release 發佈不產生 .pdb，讓散佈目錄乾淨。Debug 仍保留符號以利除錯。 -->
+  <!-- Release 不產生 .pdb，保持散佈目錄乾淨 -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <!-- MinVer 版號設定 -->
+  <PropertyGroup>
+    <!-- Git Tag 格式：v0.1.0，程式版號顯示為 0.1.0 -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+
+    <!-- 尚未建立任何 Tag 時的最低版本 -->
+    <MinVerMinimumMajorMinor>0.1</MinVerMinimumMajorMinor>
+
+    <!-- 減少 build log 雜訊（可選） -->
+    <MinVerVerbosity>minimal</MinVerVerbosity>
   </PropertyGroup>
 </Project>
