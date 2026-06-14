@@ -154,9 +154,9 @@ public static class ReviewScreen
     /// 每行最前面加行號欄：context/(+) 顯示更版行號，(-) 顯示原版行號。
     /// </summary>
     private static List<string> BuildPreviewLines(
-        string newText, string oldText, bool ignoreWhitespace, int totalWidth, int maxRows, out int diffCount)
+        string leftText, string rightText, bool ignoreWhitespace, int totalWidth, int maxRows, out int diffCount)
     {
-        var rows = DiffEngine.Compare(newText, oldText, ignoreWhitespace);
+        var rows = DiffEngine.Compare(leftText, rightText, ignoreWhitespace);
         diffCount = rows.Count(r => r.Kind != DiffKind.Same);
 
         int maxNum = 0;

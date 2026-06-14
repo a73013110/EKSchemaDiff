@@ -126,6 +126,7 @@ public static class SettingsEditor
                 }
                 return list;
             },
+            header: Banner.Show,
             footer: "[grey39]↑↓ 移動 · Enter 切換/編輯 · Esc 返回[/]",
             onActivate: idx =>
             {
@@ -133,8 +134,7 @@ public static class SettingsEditor
                 if (slot.Kind == SlotKind.Finish) return false; // 完成列 → 離開
                 if (slot.Kind == SlotKind.Item) slot.Row!.Activate(profile);
                 return true; // 就地處理，停留
-            },
-            header: Banner.Show);
+            });
     }
 
     /// <summary>開關值：顏色＋實心/空心圓雙重區隔，遠看也能一眼分辨開或關。</summary>

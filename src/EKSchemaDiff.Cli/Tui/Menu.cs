@@ -17,16 +17,17 @@ public static class Menu
 {
     /// <summary>
     /// 顯示選單，回傳選取索引；Esc 回傳 -1。itemsProvider 每格回傳最新標籤（markup），可顯示即時值。
-    /// onActivate：Enter 時呼叫，回傳 true 表示已就地處理（停留並重繪，游標不動），false 表示以此索引離開。
+    /// 參數依畫面由上而下排列：header（最上）→ title → items → footer（最下），最後才是行為參數。
     /// header：每格頂端要印的內容（例如 Banner），會跟著畫面一起重繪而不被清掉。
+    /// onActivate：Enter 時呼叫，回傳 true 表示已就地處理（停留並重繪，游標不動），false 表示以此索引離開。
     /// </summary>
     public static int Show(
         string title,
         Func<IReadOnlyList<MenuItem>> itemsProvider,
-        int initial = 0,
+        Action? header = null,
         string? footer = null,
-        Func<int, bool>? onActivate = null,
-        Action? header = null)
+        int initial = 0,
+        Func<int, bool>? onActivate = null)
     {
         var items = itemsProvider();
         if (items.Count == 0) return -1;

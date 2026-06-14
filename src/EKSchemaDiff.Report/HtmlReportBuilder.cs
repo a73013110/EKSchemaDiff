@@ -26,10 +26,10 @@ public static class HtmlReportBuilder
 
     /// <summary>產生單一物件的逐行差異報告。回傳 (html, 差異列數)。</summary>
     public static (string Html, int DifferenceCount) BuildObjectReport(
-        string objectName, string action, string newText, string oldText,
+        string objectName, string action, string leftText, string rightText,
         bool ignoreWhitespace, DateTime generatedAt)
     {
-        var rows = DiffEngine.Compare(newText, oldText, ignoreWhitespace);
+        var rows = DiffEngine.Compare(leftText, rightText, ignoreWhitespace);
         int differenceCount = rows.Count(r => r.Kind != DiffKind.Same);
         var stamp = generatedAt.ToString("yyyy/MM/dd HH:mm:ss");
 

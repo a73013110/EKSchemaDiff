@@ -50,8 +50,8 @@ public sealed class HomeCommand : Command<CompareSettings>
                     new() { Label = "列出 profile", Description = "顯示目前已發現的所有 profile 與設定檔位置。" },
                     new() { Label = "離開", Description = "結束程式。" },
                 },
-                footer: $"[grey39]設定檔：{Markup.Escape(store.ProjectConfigPath ?? "(尚未建立)")}　·　profile：{profileCount}[/]",
-                header: Banner.Show);
+                header: Banner.Show,
+                footer: $"[grey39]設定檔：{Markup.Escape(store.ProjectConfigPath ?? "(尚未建立)")}　·　profile：{profileCount}[/]");
 
             if (pick is >= 0 and <= 3) AnsiConsole.Clear();   // 進入動作前清一次（非每次按鍵，不會閃）
             switch (pick)
