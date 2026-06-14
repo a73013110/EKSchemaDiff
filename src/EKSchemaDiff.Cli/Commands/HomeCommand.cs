@@ -7,15 +7,15 @@ using Spectre.Console.Cli;
 namespace EKSchemaDiff.Cli.Commands;
 
 /// <summary>預設命令：顯示主選單。給 --profile / --yes 時直接進入比對（快速啟動/CI）。</summary>
-public sealed class HomeCommand : Command<RunSettings>
+public sealed class HomeCommand : Command<CompareSettings>
 {
-    protected override int Execute(CommandContext context, RunSettings settings, CancellationToken cancellationToken)
+    protected override int Execute(CommandContext context, CompareSettings settings, CancellationToken cancellationToken)
     {
         // 直接模式：指定 profile 或非互動時，跳過主選單。
         if (!string.IsNullOrWhiteSpace(settings.Profile) || settings.Yes)
         {
             Banner.Show();
-            return RunCommand.RunDirect(settings);
+            return CompareCommand.Run(settings);
         }
 
         if (!ConsoleUi.Interactive)
@@ -102,7 +102,7 @@ public sealed class HomeCommand : Command<RunSettings>
         }
     }
 
-    private static void DoCompare(ConfigStore store, RunSettings settings)
+    private static void DoCompare(ConfigStore store, CompareSettings settings)
     {
         if (store.Effective.Profiles.Count == 0)
         {
@@ -112,6 +112,7 @@ public sealed class HomeCommand : Command<RunSettings>
         }
 
         var profile = Prompts.PickProfile(store.Effective.Profiles);
+        if (profile is null) return;   // 按 Esc 取消挑選，回主選單
 
         CompareWorkflow.Run(store, profile, settings.Out, null, interactive: true);
         Pause();
@@ -130,6 +131,7 @@ public sealed class HomeCommand : Command<RunSettings>
         }
 
         var profile = Prompts.PickProfile(config.Profiles);
+        if (profile is null) return;   // 按 Esc 取消挑選，回主選單
 
         SettingsEditor.Edit(profile);
         var path = useGlobal ? store.SaveGlobal(config) : store.SaveProject(config);

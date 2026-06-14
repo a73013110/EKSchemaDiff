@@ -13,7 +13,7 @@ app.Configure(config =>
 {
     config.SetApplicationName("eksd");
 
-    config.AddCommand<RunCommand>("compare")
+    config.AddCommand<CompareCommand>("compare")
         .WithDescription("直接比對兩個資料庫並匯出（不經主選單）");
 
     config.AddCommand<ConfigCommand>("config")

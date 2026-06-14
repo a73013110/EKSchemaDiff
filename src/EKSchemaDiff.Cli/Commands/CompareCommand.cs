@@ -6,7 +6,7 @@ using Spectre.Console.Cli;
 
 namespace EKSchemaDiff.Cli.Commands;
 
-public sealed class RunSettings : CommandSettings
+public sealed class CompareSettings : CommandSettings
 {
     [CommandOption("-p|--profile <NAME>")]
     [Description("要使用的 profile 名稱（指定時跳過主選單，直接比對）")]
@@ -17,7 +17,7 @@ public sealed class RunSettings : CommandSettings
     public string? Out { get; init; }
 
     [CommandOption("-e|--export <MODE>")]
-    [Description("部署 SQL 輸出：single | split | both")]
+    [Description("部署 SQL 輸出：single | perobject | both")]
     public string? Export { get; init; }
 
     [CommandOption("-y|--yes")]
@@ -30,16 +30,16 @@ public sealed class RunSettings : CommandSettings
 }
 
 /// <summary>compare 命令：直接比對並匯出（不經主選單）。</summary>
-public sealed class RunCommand : Command<RunSettings>
+public sealed class CompareCommand : Command<CompareSettings>
 {
-    protected override int Execute(CommandContext context, RunSettings settings, CancellationToken cancellationToken)
+    protected override int Execute(CommandContext context, CompareSettings settings, CancellationToken cancellationToken)
     {
         Banner.Show();
-        return RunDirect(settings);
+        return Run(settings);
     }
 
     /// <summary>直接執行比對流程（供 compare 命令與主選單的快速模式共用）。</summary>
-    public static int RunDirect(RunSettings settings)
+    public static int Run(CompareSettings settings)
     {
         ConfigStore store;
         try { store = ConfigStore.Discover(settings.StartDir); }
@@ -56,13 +56,17 @@ public sealed class RunCommand : Command<RunSettings>
             return 1;
         }
 
-        Profile profile;
+        Profile? profile;
         try
         {
-            profile = store.ResolveProfile(settings.Profile)
-                      ?? (settings.Yes
-                          ? throw new InvalidOperationException("有多組 profile，請以 --profile 指定。")
-                          : Prompts.PickProfile(store.Effective.Profiles));
+            profile = store.ResolveProfile(settings.Profile);
+            if (profile is null)
+            {
+                if (settings.Yes)
+                    throw new InvalidOperationException("有多組 profile，請以 --profile 指定。");
+                profile = Prompts.PickProfile(store.Effective.Profiles);
+                if (profile is null) return 0;   // 按 Esc 取消挑選
+            }
         }
         catch (Exception ex)
         {

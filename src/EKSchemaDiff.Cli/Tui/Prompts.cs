@@ -9,23 +9,27 @@ public static class Prompts
     public static string PromptPassword(string label) =>
         AnsiConsole.Prompt(new TextPrompt<string>($"請輸入 [yellow]{Markup.Escape(label)}[/]：").Secret());
 
-    /// <summary>從多組 profile 中互動挑選。</summary>
-    public static Profile PickProfile(IReadOnlyList<Profile> profiles)
+    /// <summary>
+    /// 從多組 profile 中互動挑選；與主選單同一套畫面（Banner + 游標保留 + Esc 返回）。
+    /// 回傳選取的 profile；按 Esc 取消時回傳 null。只有一組時直接回傳，不顯示選單。
+    /// </summary>
+    public static Profile? PickProfile(IReadOnlyList<Profile> profiles)
     {
         if (profiles.Count == 1) return profiles[0];
 
-        var byLabel = new Dictionary<string, Profile>();
-        foreach (var p in profiles)
-        {
-            var label = $"{p.Name}  [grey]{Markup.Escape(p.Source.ToSafeDisplay())} → {Markup.Escape(p.Target.ToSafeDisplay())}[/]";
-            byLabel[label] = p;
-        }
+        var items = profiles
+            .Select(p => new MenuItem
+            {
+                Label = $"[bold]{Markup.Escape(p.Name)}[/]",
+                Description = $"{p.Source.ToSafeDisplay()} → {p.Target.ToSafeDisplay()}",
+            })
+            .ToList();
 
-        var picked = AnsiConsole.Prompt(
-            new SelectionPrompt<string>()
-                .Title("選擇要使用的 [yellow]profile[/]")
-                .PageSize(15)
-                .AddChoices(byLabel.Keys));
-        return byLabel[picked];
+        int idx = Menu.Show(
+            "選擇要使用的 [yellow]profile[/]",
+            () => items,
+            header: Banner.Show);
+
+        return idx < 0 ? null : profiles[idx];
     }
 }
