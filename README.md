@@ -6,8 +6,11 @@
 `eksd` 是一支終端機工具，用微軟官方的 **DacFx**（Visual Studio「結構描述比較」的同一個引擎）比對兩個 SQL Server 資料庫，讓你像 VS 一樣勾選要更版的物件、預覽差異，最後一次輸出：
 
 - **完整部署 SQL**（依相依順序，官方引擎產生，非手寫）
+- **完整還原腳本**（完整部署腳本的反向，供部署異常或回版時把目標還原回部署前狀態）
 - **逐物件的個別 SQL 檔**（以單一物件為主，由 DacFx 官方引擎單獨產生，等同 VS 逐物件勾選匯出）
 - **逐物件差異 HTML 報告 + 總覽**（暖色系，左更版／右原版）
+
+以上每項輸出都可在設定頁或 `exportOptions` 各自開關（`fullScript` / `fullRollbackScript` / `perObjectScripts` / `exportHtml`）。
 
 相比舊的「VS 匯出 → 拆分 → 手動快照 → 差異」流程，`eksd` 把這些收斂成一支指令，而且**資料表（欄位、限制、描述、索引）也能比對**——這是舊流程做不到的。
 
@@ -93,7 +96,9 @@ eksd
         "excludedObjectTypes": ["Permissions", "Users", "Logins", "RoleMembership", "Credentials"]
       },
       "exportOptions": {
-        "deployScript": "Both",
+        "fullScript": true,
+        "perObjectScripts": true,
+        "fullRollbackScript": false,
         "exportHtml": true,
         "deployDatabaseName": null
       }
@@ -146,13 +151,14 @@ eksd
 | `eksd init` | 在目前目錄建立 `.eksd.json` 範本 |
 | `eksd profiles` | 列出已發現的 profile |
 
-`compare` 常用選項：`--profile <名稱>`、`--out <目錄>`、`--export single|perobject|both`、`--yes`（非互動，CI 用）。
+`compare` 常用選項：`--profile <名稱>`、`--out <目錄>`、`--yes`（非互動，CI 用）。輸出項目（完整／還原／逐物件／HTML）一律依 profile 的 `exportOptions` 設定。
 
 ## 輸出結構
 
 ```
 <outputDir>/
   完整部署腳本.sql            # 單一完整部署 SQL（依相依順序）
+  完整還原腳本.sql            # 完整部署腳本的反向（回版/異常還原用；fullRollbackScript 開啟時才產生）
   逐物件部署腳本/
     00_部署清單.csv           # 逐物件部署清單（順序、動作、類型、驗證結果）
     01_ALTER_TABLE_dbo_DemoTable.sql        # 欄位變更與該欄描述併在同一檔

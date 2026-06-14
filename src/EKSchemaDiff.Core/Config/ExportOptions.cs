@@ -2,23 +2,23 @@ using System.Text.Json.Serialization;
 
 namespace EKSchemaDiff.Core.Config;
 
-/// <summary>部署 SQL 的輸出形式。</summary>
-public enum DeployScriptMode
-{
-    /// <summary>只輸出單一完整部署腳本（完整部署腳本.sql）。</summary>
-    Single,
-    /// <summary>只輸出依相依順序編號的逐物件部署檔。</summary>
-    PerObject,
-    /// <summary>同時輸出完整部署腳本與逐物件部署檔（預設）。</summary>
-    Both,
-}
-
 /// <summary>輸出選項。</summary>
 public sealed class ExportOptions
 {
-    [JsonPropertyName("deployScript")]
-    [JsonConverter(typeof(JsonStringEnumConverter<DeployScriptMode>))]
-    public DeployScriptMode DeployScript { get; set; } = DeployScriptMode.Both;
+    /// <summary>是否輸出單一完整部署腳本（完整部署腳本.sql，依相依順序的整批 DDL）。</summary>
+    [JsonPropertyName("fullScript")]
+    public bool FullScript { get; set; } = true;
+
+    /// <summary>是否輸出依相依順序編號的逐物件部署檔。</summary>
+    [JsonPropertyName("perObjectScripts")]
+    public bool PerObjectScripts { get; set; } = true;
+
+    /// <summary>
+    /// 是否輸出「完整還原腳本」（完整部署腳本的反向）：把來源/目標對調產生，
+    /// 供完整部署腳本執行異常或需回版時，將目標還原回部署前的狀態。
+    /// </summary>
+    [JsonPropertyName("fullRollbackScript")]
+    public bool FullRollbackScript { get; set; } = false;
 
     /// <summary>是否輸出暖色系差異 HTML 報告。</summary>
     [JsonPropertyName("exportHtml")]
@@ -36,9 +36,22 @@ public sealed class ExportOptions
     [JsonPropertyName("deployDatabaseName")]
     public string? DeployDatabaseName { get; set; }
 
+    /// <summary>把目前會輸出的項目描述成一行（供日誌、情境摘要、profile 清單共用，用語一致）。</summary>
+    public string Describe()
+    {
+        var parts = new List<string>();
+        if (FullScript) parts.Add("完整部署腳本");
+        if (FullRollbackScript) parts.Add("完整還原腳本");
+        if (PerObjectScripts) parts.Add("逐物件部署檔");
+        if (ExportHtml) parts.Add("差異 HTML");
+        return parts.Count == 0 ? "(無輸出)" : string.Join(" + ", parts);
+    }
+
     public ExportOptions Clone() => new()
     {
-        DeployScript = DeployScript,
+        FullScript = FullScript,
+        PerObjectScripts = PerObjectScripts,
+        FullRollbackScript = FullRollbackScript,
         ExportHtml = ExportHtml,
         HtmlIgnoreWhitespace = HtmlIgnoreWhitespace,
         DeployDatabaseName = DeployDatabaseName,

@@ -107,6 +107,21 @@ public static class ConsoleUI
     }
 
     /// <summary>
+    /// 進入替代螢幕緩衝區（alternate screen buffer）：給持續重繪的動畫畫面用，
+    /// 期間的輸出不會留進正常的捲動歷史；離開時還原進入前的畫面。配合 <see cref="LeaveAltScreen"/>。
+    /// </summary>
+    public static void EnterAltScreen()
+    {
+        Console.Out.Write(Vt + "[?1049h" + Vt + "[H");
+    }
+
+    /// <summary>離開替代螢幕緩衝區，還原進入前的畫面（動畫殘影不會污染捲動歷史）。</summary>
+    public static void LeaveAltScreen()
+    {
+        Console.Out.Write(Vt + "[?1049l");
+    }
+
+    /// <summary>
     /// 開始重繪一格：游標歸位到左上，但不做整頁 Console.Clear()（那會在 Windows 造成閃爍）。
     /// 配合每行的 Line()（清到行尾）與 EndFrame()（清到畫面底）即可無閃爍覆寫。
     /// </summary>

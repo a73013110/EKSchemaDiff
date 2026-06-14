@@ -75,6 +75,36 @@ public sealed class CompareSession
     }
 
     /// <summary>
+    /// 產生「完整還原腳本」（完整部署腳本的反向）：把來源/目標端點對調後重新比對，
+    /// 由官方引擎產生可將目標還原回部署前狀態的腳本。僅還原目前已納入的物件（依名稱對應）。
+    /// 重用既有端點（連線字串已建立），不會再次詢問密碼，也不影響正向比對狀態。
+    /// </summary>
+    public string GenerateReverseScript()
+    {
+        var includedNames = _differences
+            .Where(d => d.Included)
+            .Select(d => d.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // 端點對調：原目標當來源、原來源當目標 → 產生「把新結構改回舊結構」的腳本。
+        var reverse = new SchemaComparison(_comparison.Target, _comparison.Source);
+        Profile.CompareOptions.ApplyTo(reverse.Options, new List<string>());
+
+        var result = reverse.Compare();
+        if (!result.IsValid) return string.Empty;
+
+        foreach (var rd in result.Differences.Select(d => new ObjectDifference(d)))
+        {
+            bool want = includedNames.Contains(rd.Name);
+            if (want && !rd.Inner.Included) result.Include(rd.Inner);
+            else if (!want && rd.Inner.Included) result.Exclude(rd.Inner);
+        }
+
+        // 還原腳本一樣在目標（客戶）資料庫上執行，故沿用相同的部署庫名。
+        return result.GenerateScript(Profile.ResolveDeployDatabaseName()).Script ?? string.Empty;
+    }
+
+    /// <summary>
     /// 逐物件產生官方部署腳本：只納入「該物件」，由 DacFx 官方引擎產生只含該物件變更
     /// （含其描述、相依模組刷新等，皆由引擎決定）的腳本——等同 VS「結構描述比較」中只勾一個物件再匯出。
     /// 會改動納入狀態；一批處理完請呼叫 <see cref="RestoreInclusion"/> 還原。

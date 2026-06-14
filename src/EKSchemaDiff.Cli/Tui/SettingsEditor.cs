@@ -56,15 +56,24 @@ public static class SettingsEditor
                 EditExcluded,
                 "整類排除不比對的物件（如 Permissions/Users/Logins）。Enter 編輯，逗號分隔。"),
         }),
-        new("輸出設定", new[]
+        new("部署 SQL 輸出", new[]
         {
-            new Row("部署 SQL 輸出形式", p => Plain(p.ExportOptions.DeployScript.ToString()),
-                p => p.ExportOptions.DeployScript = Cycle(p.ExportOptions.DeployScript),
-                "Both＝完整部署腳本＋逐物件部署檔；Single＝只完整部署腳本；PerObject＝只逐物件部署檔。Enter 循環切換。"),
+            new Row("完整部署腳本", p => Toggle(p.ExportOptions.FullScript),
+                p => p.ExportOptions.FullScript = !p.ExportOptions.FullScript,
+                "依相依順序排好的單一完整部署腳本（完整部署腳本.sql）。"),
+            new Row("完整還原腳本（回版用）", p => Toggle(p.ExportOptions.FullRollbackScript),
+                p => p.ExportOptions.FullRollbackScript = !p.ExportOptions.FullRollbackScript,
+                "完整部署腳本的反向：若部署異常或要回版，執行此腳本可把目標還原回部署前狀態（完整還原腳本.sql）。"),
+            new Row("逐物件部署檔", p => Toggle(p.ExportOptions.PerObjectScripts),
+                p => p.ExportOptions.PerObjectScripts = !p.ExportOptions.PerObjectScripts,
+                "依相依順序編號、以單一物件為主的逐物件部署檔，供逐一檢視與選擇性套用。"),
             new Row("部署資料庫名稱（USE 覆寫）",
                 p => Plain(string.IsNullOrWhiteSpace(p.ExportOptions.DeployDatabaseName) ? "(沿用目標庫名)" : p.ExportOptions.DeployDatabaseName!),
                 EditDeployDb,
                 "腳本頂端 USE [...] 要用的資料庫名。留空＝沿用目標庫名；客戶端實際庫名不同時填這裡。Enter 編輯。"),
+        }),
+        new("差異報告（HTML）", new[]
+        {
             new Row("輸出差異 HTML", p => Toggle(p.ExportOptions.ExportHtml),
                 p => p.ExportOptions.ExportHtml = !p.ExportOptions.ExportHtml,
                 "是否產生暖色系差異 HTML 報告。"),
@@ -168,11 +177,4 @@ public static class SettingsEditor
         p.ExportOptions.DeployDatabaseName = string.IsNullOrWhiteSpace(input) ? null : input.Trim();
         Console.CursorVisible = false;
     }
-
-    private static DeployScriptMode Cycle(DeployScriptMode m) => m switch
-    {
-        DeployScriptMode.Both => DeployScriptMode.Single,
-        DeployScriptMode.Single => DeployScriptMode.PerObject,
-        _ => DeployScriptMode.Both,
-    };
 }

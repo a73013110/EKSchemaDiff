@@ -23,7 +23,7 @@ public static class ProfileTable
                 Markup.Escape(p.Source.ToSafeDisplay()),
                 Markup.Escape(p.Target.ToSafeDisplay()),
                 p.CompareOptions.IgnorePermissions ? "[green]是[/]" : "[red]否[/]",
-                p.ExportOptions.DeployScript.ToString());
+                Markup.Escape(p.ExportOptions.Describe()));
         }
         return table;
     }

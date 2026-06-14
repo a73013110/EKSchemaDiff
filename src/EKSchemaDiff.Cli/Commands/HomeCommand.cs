@@ -27,7 +27,7 @@ public sealed class HomeCommand : Command<CompareSettings>
         {
             _banner.Show();
             return _workflow.RunFromConfig(
-                settings.StartDir, settings.Profile, settings.Out, settings.Export, interactive: !settings.Yes);
+                settings.StartDir, settings.Profile, settings.Out, interactive: !settings.Yes);
         }
 
         if (!ConsoleUI.Interactive)
@@ -126,7 +126,7 @@ public sealed class HomeCommand : Command<CompareSettings>
         var profile = Prompts.PickProfile(store.Effective.Profiles, _banner);
         if (profile is null) return;   // 按 Esc 取消挑選，回主選單
 
-        _workflow.Run(store, profile, settings.Out, null, interactive: true);
+        _workflow.Run(store, profile, settings.Out, interactive: true);
         Pause();
     }
 

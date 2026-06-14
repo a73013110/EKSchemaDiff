@@ -13,10 +13,6 @@ public sealed class CompareSettings : CommandSettings
     [Description("輸出目錄（覆寫 profile 設定）")]
     public string? Out { get; init; }
 
-    [CommandOption("-e|--export <MODE>")]
-    [Description("部署 SQL 輸出：single | perobject | both")]
-    public string? Export { get; init; }
-
     [CommandOption("-y|--yes")]
     [Description("非互動：沿用引擎建議的勾選與 profile 設定，直接匯出")]
     public bool Yes { get; init; }
@@ -42,6 +38,6 @@ public sealed class CompareCommand : Command<CompareSettings>
     {
         _banner.Show();
         return _workflow.RunFromConfig(
-            settings.StartDir, settings.Profile, settings.Out, settings.Export, interactive: !settings.Yes);
+            settings.StartDir, settings.Profile, settings.Out, interactive: !settings.Yes);
     }
 }

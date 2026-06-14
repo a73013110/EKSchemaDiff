@@ -30,7 +30,7 @@
 
 ## E. 檔案組織
 - 一檔一個「主要」公開型別，檔名 = 型別名。
-- 緊耦合的小列舉或 `*Settings` 可與其主型別同檔（如 `DeployScriptMode` 與 `ExportOptions`、`CompareSettings` 與 `CompareCommand`）。
+- 緊耦合的小列舉或 `*Settings` 可與其主型別同檔（如 `ExportItemState` 與 `Exporter`、`CompareSettings` 與 `CompareCommand`）。
 
 ## F. 相依注入（DI）原則
 - 判準是**「是否需要替換、隔離測試或生命週期管理」**，而非單純「有無副作用」。

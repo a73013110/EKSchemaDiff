@@ -33,7 +33,9 @@
         "excludedObjectTypes": ["Permissions", "Users", "Logins", "RoleMembership", "Credentials"]
       },
       "exportOptions": {
-        "deployScript": "Both",
+        "fullScript": true,
+        "perObjectScripts": true,
+        "fullRollbackScript": false,
         "exportHtml": true,
         "htmlIgnoreWhitespace": false
       }
@@ -65,7 +67,9 @@
         "excludedObjectTypes": ["Permissions", "Users", "Logins", "RoleMembership", "Credentials"]
       },
       "exportOptions": {
-        "deployScript": "Both",
+        "fullScript": true,
+        "perObjectScripts": true,
+        "fullRollbackScript": false,
         "exportHtml": true,
         "deployDatabaseName": null,
         "htmlIgnoreWhitespace": false
