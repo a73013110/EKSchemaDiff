@@ -118,7 +118,7 @@ public static class SettingsEditor
                             var r = slot.Row!;
                             list.Add(new MenuItem
                             {
-                                Label = $"{Markup.Escape(ConsoleUi.PadDisplay(r.Title, 30))}  {r.Value(profile)}",
+                                Label = $"{Markup.Escape(ConsoleUI.PadDisplay(r.Title, 30))}  {r.Value(profile)}",
                                 Description = r.Desc,
                             });
                             break;

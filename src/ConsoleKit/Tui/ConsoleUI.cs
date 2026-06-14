@@ -1,9 +1,9 @@
 using Spectre.Console;
 
-namespace EKSchemaDiff.Cli.Tui;
+namespace ConsoleKit.Tui;
 
 /// <summary>自訂互動畫面的共用低階輔助：尺寸、截斷、捲動視窗、逐格重繪。</summary>
-public static class ConsoleUi
+public static class ConsoleUI
 {
     private const string Vt = "";   // ESC，VT 控制碼前綴
 

@@ -18,7 +18,7 @@ public sealed class HomeCommand : Command<CompareSettings>
             return CompareCommand.Run(settings);
         }
 
-        if (!ConsoleUi.Interactive)
+        if (!ConsoleUI.Interactive)
         {
             Banner.Show();
             AnsiConsole.MarkupLine("[yellow]目前不是互動終端機，無法顯示主選單。[/]");

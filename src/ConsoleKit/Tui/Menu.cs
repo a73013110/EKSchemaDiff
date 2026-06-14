@@ -1,13 +1,6 @@
 using Spectre.Console;
 
-namespace EKSchemaDiff.Cli.Tui;
-
-public sealed class MenuItem
-{
-    public required string Label { get; init; }       // 可含 Spectre markup
-    public string? Description { get; init; }          // 選中時顯示的中文說明
-    public bool IsSeparator { get; init; }
-}
+namespace ConsoleKit.Tui;
 
 /// <summary>
 /// 游標保留的單選選單（自訂鍵盤迴圈）。每次重繪會重新取得標籤，可顯示即時值。
@@ -32,7 +25,7 @@ public static class Menu
         var items = itemsProvider();
         if (items.Count == 0) return -1;
 
-        if (!ConsoleUi.Interactive)
+        if (!ConsoleUI.Interactive)
         {
             // 後援：用 Spectre 標準選單（無游標保留，但不會卡住）。
             var labels = items.Select((it, i) => $"{i} {it.Label}").ToList();
@@ -98,16 +91,16 @@ public static class Menu
 
     private static void Render(string title, string? footer, IReadOnlyList<MenuItem> items, int cursor, Action? header)
     {
-        ConsoleUi.BeginFrame();
+        ConsoleUI.BeginFrame();
         header?.Invoke();
-        ConsoleUi.Line(title);
-        ConsoleUi.Line();
+        ConsoleUI.Line(title);
+        ConsoleUI.Line();
 
-        int w = ConsoleUi.Width;
+        int w = ConsoleUI.Width;
         // 可見列數：上限為終端高度可容納列數（至少 4），但不超過實際項目數。
         // 注意不可用 Math.Clamp(x, 4, items.Count)：當項目數 < 4 時 min>max 會丟 ArgumentException。
-        int visible = Math.Min(items.Count, Math.Max(4, ConsoleUi.Height - 9));
-        int top = ConsoleUi.ScrollTop(cursor, items.Count, visible);
+        int visible = Math.Min(items.Count, Math.Max(4, ConsoleUI.Height - 9));
+        int top = ConsoleUI.ScrollTop(cursor, items.Count, visible);
 
         for (int i = top; i < Math.Min(items.Count, top + visible); i++)
         {
@@ -115,22 +108,22 @@ public static class Menu
             if (it.IsSeparator)
             {
                 // 有標題的分隔列當「分類標題」呈現；沒有就畫一條淡線。
-                ConsoleUi.Line(string.IsNullOrWhiteSpace(it.Label)
+                ConsoleUI.Line(string.IsNullOrWhiteSpace(it.Label)
                     ? "  [grey39]──────────[/]"
                     : $"  {it.Label}");
                 continue;
             }
             if (i == cursor)
-                ConsoleUi.Line($"[orange3]>[/] {it.Label}");
+                ConsoleUI.Line($"[orange3]>[/] {it.Label}");
             else
-                ConsoleUi.Line($"  {it.Label}");
+                ConsoleUI.Line($"  {it.Label}");
         }
 
         var desc = items[cursor].Description;
-        ConsoleUi.Line();
+        ConsoleUI.Line();
         if (!string.IsNullOrWhiteSpace(desc))
-            ConsoleUi.Line($"[grey]{ConsoleUi.Esc(ConsoleUi.Truncate(desc!, w - 2))}[/]");
-        ConsoleUi.Line(footer ?? "[grey39]↑↓ 移動 · Enter 選擇 · Esc 返回[/]");
-        ConsoleUi.EndFrame();
+            ConsoleUI.Line($"[grey]{ConsoleUI.Esc(ConsoleUI.Truncate(desc!, w - 2))}[/]");
+        ConsoleUI.Line(footer ?? "[grey39]↑↓ 移動 · Enter 選擇 · Esc 返回[/]");
+        ConsoleUI.EndFrame();
     }
 }

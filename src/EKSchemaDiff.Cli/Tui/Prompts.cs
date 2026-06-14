@@ -7,7 +7,7 @@ public static class Prompts
 {
     /// <summary>SQL 驗證缺密碼時的互動輸入。</summary>
     public static string PromptPassword(string label) =>
-        AnsiConsole.Prompt(new TextPrompt<string>($"請輸入 [yellow]{Markup.Escape(label)}[/]：").Secret());
+        TextInput.PromptSecret($"請輸入 [yellow]{Markup.Escape(label)}[/]：");
 
     /// <summary>
     /// 從多組 profile 中互動挑選；與主選單同一套畫面（Banner + 游標保留 + Esc 返回）。

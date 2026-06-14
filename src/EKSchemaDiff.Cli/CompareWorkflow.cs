@@ -184,16 +184,16 @@ public static class CompareWorkflow
     private static void RenderExportFrame(
         ExportProgress p, bool cancelling, int tick, IReadOnlyList<string> history, bool done)
     {
-        ConsoleUi.BeginFrame();
+        ConsoleUI.BeginFrame();
         Banner.Show();
 
         string spin = done ? "[green]✔[/]" : $"[orange3]{SpinnerFrames[tick % SpinnerFrames.Length]}[/]";
-        ConsoleUi.Line($"{spin} [orange3]產出進度[/]　[grey39]Esc 中斷[/]");
-        ConsoleUi.Line();
+        ConsoleUI.Line($"{spin} [orange3]產出進度[/]　[grey39]Esc 中斷[/]");
+        ConsoleUI.Line();
 
         int total = Math.Max(1, p.Total);
         int current = Math.Clamp(p.Current, 0, total);
-        int barWidth = Math.Clamp(ConsoleUi.Width - 26, 10, 60);
+        int barWidth = Math.Clamp(ConsoleUI.Width - 26, 10, 60);
         int filled = (int)Math.Round((double)current / total * barWidth);
         filled = Math.Clamp(filled, 0, barWidth);
 
@@ -208,31 +208,31 @@ public static class CompareWorkflow
         }
         var bar = $"[green]{new string('█', filled)}[/][grey39]{empty}[/]";
         int pct = (int)Math.Round((double)current / total * 100);
-        ConsoleUi.Line($"{bar}  [bold]{current}/{total}[/] [grey]({pct}%)[/]");
-        ConsoleUi.Line();
+        ConsoleUI.Line($"{bar}  [bold]{current}/{total}[/] [grey]({pct}%)[/]");
+        ConsoleUI.Line();
 
-        ConsoleUi.Line($"[grey]階段：[/]{ConsoleUi.Esc(p.Phase)}");
+        ConsoleUI.Line($"[grey]階段：[/]{ConsoleUI.Esc(p.Phase)}");
         if (!done && !string.IsNullOrWhiteSpace(p.Item))
-            ConsoleUi.Line($"{spin} [grey]處理中：[/]{ConsoleUi.Esc(p.Item)}");
+            ConsoleUI.Line($"{spin} [grey]處理中：[/]{ConsoleUI.Esc(p.Item)}");
 
         // 已處理清單：顯示最近數筆，最後一筆若仍在處理中則不標完成。
-        int avail = Math.Max(3, ConsoleUi.Height - 14);
+        int avail = Math.Max(3, ConsoleUI.Height - 14);
         int inProgressTail = done ? 0 : 1;   // 最後一筆通常是進行中那筆
         int completedCount = Math.Max(0, history.Count - inProgressTail);
         if (completedCount > 0)
         {
-            ConsoleUi.Line();
-            ConsoleUi.Line($"[grey39]── 已處理 {completedCount} 項 ──[/]");
+            ConsoleUI.Line();
+            ConsoleUI.Line($"[grey39]── 已處理 {completedCount} 項 ──[/]");
             int show = Math.Min(avail, completedCount);
             for (int i = completedCount - show; i < completedCount; i++)
-                ConsoleUi.Line($"  [green]✓[/] [grey]{ConsoleUi.Esc(history[i])}[/]");
+                ConsoleUI.Line($"  [green]✓[/] [grey]{ConsoleUI.Esc(history[i])}[/]");
             if (completedCount > show)
-                ConsoleUi.Line($"  [grey39]…（前 {completedCount - show} 項略）[/]");
+                ConsoleUI.Line($"  [grey39]…（前 {completedCount - show} 項略）[/]");
         }
 
         if (cancelling)
-            ConsoleUi.Line("[yellow]正在中斷…[/]");
-        ConsoleUi.EndFrame();
+            ConsoleUI.Line("[yellow]正在中斷…[/]");
+        ConsoleUI.EndFrame();
     }
 
     private static void ShowProfileSummary(Profile profile)

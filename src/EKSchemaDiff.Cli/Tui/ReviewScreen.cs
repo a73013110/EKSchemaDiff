@@ -26,7 +26,7 @@ public static class ReviewScreen
         for (int i = 0; i < ordered.Count; i++) included[i] = ordered[i].Included;
 
         // 後援：非互動環境改用 Spectre 標準多選（無即時預覽）。
-        if (!ConsoleUi.Interactive)
+        if (!ConsoleUI.Interactive)
             return FallbackMultiSelect(ordered);
 
         int cursor = 0;
@@ -43,9 +43,9 @@ public static class ReviewScreen
                 {
                     // 預覽/差異繪製若失敗，記錄並跳過該格重繪，避免整個畫面崩潰把程式帶掉。
                     Log.Error($"ReviewScreen 重繪失敗（cursor={cursor}）", ex);
-                    ConsoleUi.BeginFrame();
-                    ConsoleUi.Line("[red]預覽繪製發生錯誤，已略過此格。詳見記錄檔。[/]");
-                    ConsoleUi.EndFrame();
+                    ConsoleUI.BeginFrame();
+                    ConsoleUI.Line("[red]預覽繪製發生錯誤，已略過此格。詳見記錄檔。[/]");
+                    ConsoleUI.EndFrame();
                 }
                 var key = Console.ReadKey(intercept: true);
                 switch (key.Key)
@@ -94,19 +94,19 @@ public static class ReviewScreen
     private static void Render(
         IReadOnlyList<ObjectDifference> items, bool[] included, int cursor, bool ignoreWhitespace)
     {
-        ConsoleUi.BeginFrame();
-        int w = ConsoleUi.Width;
-        int h = ConsoleUi.Height;
+        ConsoleUI.BeginFrame();
+        int w = ConsoleUI.Width;
+        int h = ConsoleUI.Height;
         int chosen = included.Count(x => x);
 
-        ConsoleUi.Line("[orange3]勾選要納入此次部署的物件[/]　[grey39]↑↓ 移動 · 空白 勾選 · A 全選 · N 全不選 · Enter 確認 · Esc 返回主選單[/]");
-        ConsoleUi.Line($"已勾選 [green]{chosen}[/] / 共 {items.Count}");
-        ConsoleUi.Line();
+        ConsoleUI.Line("[orange3]勾選要納入此次部署的物件[/]　[grey39]↑↓ 移動 · 空白 勾選 · A 全選 · N 全不選 · Enter 確認 · Esc 返回主選單[/]");
+        ConsoleUI.Line($"已勾選 [green]{chosen}[/] / 共 {items.Count}");
+        ConsoleUI.Line();
 
         int previewHeaderRows = 2;
         int listMax = Math.Clamp((h - 5 - previewHeaderRows) / 2, 4, 14);
         int listRows = Math.Min(items.Count, listMax);
-        int top = ConsoleUi.ScrollTop(cursor, items.Count, listRows);
+        int top = ConsoleUI.ScrollTop(cursor, items.Count, listRows);
 
         for (int i = top; i < Math.Min(items.Count, top + listRows); i++)
         {
@@ -120,15 +120,15 @@ public static class ReviewScreen
             };
             var box = included[i] ? "[green][[x]][/]" : "[grey][[ ]][/]";
             var arrow = i == cursor ? "[orange3]>[/]" : " ";
-            var type = ConsoleUi.Esc(PadType(d.ObjectTypeName));
+            var type = ConsoleUI.Esc(PadType(d.ObjectTypeName));
             var nameMax = Math.Max(10, w - 18);
-            var name = ConsoleUi.Esc(ConsoleUi.Truncate(d.Name, nameMax));
+            var name = ConsoleUI.Esc(ConsoleUI.Truncate(d.Name, nameMax));
             var nameMarkup = i == cursor ? $"[bold]{name}[/]" : name;
-            ConsoleUi.Line($"{arrow} {box} [{color}]{icon}[/] [grey]{type}[/] {nameMarkup}");
+            ConsoleUI.Line($"{arrow} {box} [{color}]{icon}[/] [grey]{type}[/] {nameMarkup}");
         }
 
         // 分隔 + 預覽
-        ConsoleUi.Line($"[grey39]{new string('-', Math.Max(10, w - 1))}[/]");
+        ConsoleUI.Line($"[grey39]{new string('-', Math.Max(10, w - 1))}[/]");
         var cur = items[cursor];
         var action = cur.UpdateAction switch
         {
@@ -138,9 +138,9 @@ public static class ReviewScreen
         int previewRows = Math.Max(4, h - 5 - listRows - previewHeaderRows);
         var lines = BuildPreviewLines(cur.SourceScript, cur.TargetScript, ignoreWhitespace, w, previewRows, out int diffCount);
 
-        ConsoleUi.Line($"[orange3]預覽[/] {ConsoleUi.Esc(cur.Name)}　[grey]{action} · {diffCount} 差異列 · 左為行號 · (-) 原版 / (+) 更版[/]");
-        foreach (var line in lines) ConsoleUi.Line(line);
-        ConsoleUi.EndFrame();
+        ConsoleUI.Line($"[orange3]預覽[/] {ConsoleUI.Esc(cur.Name)}　[grey]{action} · {diffCount} 差異列 · 左為行號 · (-) 原版 / (+) 更版[/]");
+        foreach (var line in lines) ConsoleUI.Line(line);
+        ConsoleUI.EndFrame();
     }
 
     private static string PadType(string type)
@@ -177,24 +177,24 @@ public static class ReviewScreen
             {
                 case DiffKind.Same:
                     if (contextRun < maxContext)
-                        outLines.Add($"[grey39]{Gutter(r.LeftNumber)}[/] [grey]  {ConsoleUi.Esc(ConsoleUi.Truncate(r.Right, textWidth))}[/]");
+                        outLines.Add($"[grey39]{Gutter(r.LeftNumber)}[/] [grey]  {ConsoleUI.Esc(ConsoleUI.Truncate(r.Right, textWidth))}[/]");
                     else if (contextRun == maxContext)
                         outLines.Add($"[grey39]{new string(' ', gw)}   ···[/]");
                     contextRun++;
                     break;
                 case DiffKind.Removed:
-                    outLines.Add($"[grey39]{Gutter(r.RightNumber)}[/] [red]- {ConsoleUi.Esc(ConsoleUi.Truncate(r.Right, textWidth))}[/]");
+                    outLines.Add($"[grey39]{Gutter(r.RightNumber)}[/] [red]- {ConsoleUI.Esc(ConsoleUI.Truncate(r.Right, textWidth))}[/]");
                     contextRun = 0;
                     break;
                 case DiffKind.Added:
-                    outLines.Add($"[grey39]{Gutter(r.LeftNumber)}[/] [green]+ {ConsoleUi.Esc(ConsoleUi.Truncate(r.Left, textWidth))}[/]");
+                    outLines.Add($"[grey39]{Gutter(r.LeftNumber)}[/] [green]+ {ConsoleUI.Esc(ConsoleUI.Truncate(r.Left, textWidth))}[/]");
                     contextRun = 0;
                     break;
                 case DiffKind.Modified:
                     if (outLines.Count < maxRows)
-                        outLines.Add($"[grey39]{Gutter(r.RightNumber)}[/] [red]- {ConsoleUi.Esc(ConsoleUi.Truncate(r.Right, textWidth))}[/]");
+                        outLines.Add($"[grey39]{Gutter(r.RightNumber)}[/] [red]- {ConsoleUI.Esc(ConsoleUI.Truncate(r.Right, textWidth))}[/]");
                     if (outLines.Count < maxRows)
-                        outLines.Add($"[grey39]{Gutter(r.LeftNumber)}[/] [green]+ {ConsoleUi.Esc(ConsoleUi.Truncate(r.Left, textWidth))}[/]");
+                        outLines.Add($"[grey39]{Gutter(r.LeftNumber)}[/] [green]+ {ConsoleUI.Esc(ConsoleUI.Truncate(r.Left, textWidth))}[/]");
                     contextRun = 0;
                     break;
             }

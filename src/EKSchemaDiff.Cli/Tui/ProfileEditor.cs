@@ -92,7 +92,7 @@ public static class ProfileEditor
     /// <summary>讀一個文字欄位；按 Esc 取消整個流程。空白沿用預設。</summary>
     private static string Ask(string label, string? defaultValue)
     {
-        var input = ConsoleUi.ReadLineOrEsc($"[white]{Markup.Escape(label)}[/]", defaultValue);
+        var input = ConsoleUI.ReadLineOrEsc($"[white]{Markup.Escape(label)}[/]", defaultValue);
         if (input is null) throw new CancelException();
         return input;
     }

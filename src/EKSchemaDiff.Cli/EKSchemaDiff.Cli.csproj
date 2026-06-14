@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\ConsoleKit\ConsoleKit.csproj" />
     <ProjectReference Include="..\EKSchemaDiff.Core\EKSchemaDiff.Core.csproj" />
     <ProjectReference Include="..\EKSchemaDiff.Report\EKSchemaDiff.Report.csproj" />
   </ItemGroup>
