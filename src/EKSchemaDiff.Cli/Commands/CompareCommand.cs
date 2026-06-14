@@ -1,7 +1,4 @@
 using System.ComponentModel;
-using EKSchemaDiff.Cli.Tui;
-using EKSchemaDiff.Core.Config;
-using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace EKSchemaDiff.Cli.Commands;
@@ -32,52 +29,19 @@ public sealed class CompareSettings : CommandSettings
 /// <summary>compare 命令：直接比對並匯出（不經主選單）。</summary>
 public sealed class CompareCommand : Command<CompareSettings>
 {
-    protected override int Execute(CommandContext context, CompareSettings settings, CancellationToken cancellationToken)
+    private readonly Banner _banner;
+    private readonly CompareWorkflow _workflow;
+
+    public CompareCommand(Banner banner, CompareWorkflow workflow)
     {
-        Banner.Show();
-        return Run(settings);
+        _banner = banner;
+        _workflow = workflow;
     }
 
-    /// <summary>直接執行比對流程（供 compare 命令與主選單的快速模式共用）。</summary>
-    public static int Run(CompareSettings settings)
+    protected override int Execute(CommandContext context, CompareSettings settings, CancellationToken cancellationToken)
     {
-        ConfigStore store;
-        try { store = ConfigStore.Discover(settings.StartDir); }
-        catch (Exception ex)
-        {
-            AnsiConsole.MarkupLineInterpolated($"[red]設定載入失敗：{ex.Message}[/]");
-            return 1;
-        }
-
-        if (store.Effective.Profiles.Count == 0)
-        {
-            AnsiConsole.MarkupLine("[yellow]尚未設定任何 profile。[/]");
-            AnsiConsole.MarkupLine("請執行 [bold]eksd[/] 從主選單建立連線設定，或 [bold]eksd init[/] 產生範本。");
-            return 1;
-        }
-
-        Profile? profile;
-        try
-        {
-            profile = store.ResolveProfile(settings.Profile);
-            if (profile is null)
-            {
-                if (settings.Yes)
-                    throw new InvalidOperationException("有多組 profile，請以 --profile 指定。");
-                profile = Prompts.PickProfile(store.Effective.Profiles);
-                if (profile is null) return 0;   // 按 Esc 取消挑選
-            }
-        }
-        catch (Exception ex)
-        {
-            AnsiConsole.MarkupLineInterpolated($"[red]{ex.Message}[/]");
-            return 1;
-        }
-
-        DeployScriptMode? exportOverride = string.IsNullOrWhiteSpace(settings.Export)
-            ? null
-            : CompareWorkflow.ParseExportMode(settings.Export!);
-
-        return CompareWorkflow.Run(store, profile, settings.Out, exportOverride, interactive: !settings.Yes);
+        _banner.Show();
+        return _workflow.RunFromConfig(
+            settings.StartDir, settings.Profile, settings.Out, settings.Export, interactive: !settings.Yes);
     }
 }

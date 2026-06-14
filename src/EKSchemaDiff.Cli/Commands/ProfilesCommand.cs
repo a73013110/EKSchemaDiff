@@ -1,5 +1,4 @@
 using EKSchemaDiff.Cli.Tui;
-using EKSchemaDiff.Core.Config;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -7,13 +6,17 @@ namespace EKSchemaDiff.Cli.Commands;
 
 public sealed class ProfilesCommand : Command
 {
+    private readonly ConfigStoreFactory _configStores;
+
+    public ProfilesCommand(ConfigStoreFactory configStores) => _configStores = configStores;
+
     protected override int Execute(CommandContext context, CancellationToken cancellationToken)
     {
-        var store = ConfigStore.Discover();
+        var store = _configStores.Discover();
         if (store.Effective.Profiles.Count == 0)
         {
             AnsiConsole.MarkupLine("[yellow]尚無 profile。請執行 eksd init。[/]");
-            return 1;
+            return ExitCode.UsageError;
         }
 
         AnsiConsole.MarkupLineInterpolated($"[grey]專案設定：{store.ProjectConfigPath ?? "(無)"}[/]");
@@ -21,6 +24,6 @@ public sealed class ProfilesCommand : Command
         AnsiConsole.WriteLine();
 
         AnsiConsole.Write(ProfileTable.Build(store.Effective.Profiles, store.Effective.DefaultProfile));
-        return 0;
+        return ExitCode.Ok;
     }
 }

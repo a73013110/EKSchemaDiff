@@ -13,7 +13,7 @@ public static class Prompts
     /// 從多組 profile 中互動挑選；與主選單同一套畫面（Banner + 游標保留 + Esc 返回）。
     /// 回傳選取的 profile；按 Esc 取消時回傳 null。只有一組時直接回傳，不顯示選單。
     /// </summary>
-    public static Profile? PickProfile(IReadOnlyList<Profile> profiles)
+    public static Profile? PickProfile(IReadOnlyList<Profile> profiles, Banner banner)
     {
         if (profiles.Count == 1) return profiles[0];
 
@@ -28,7 +28,7 @@ public static class Prompts
         int idx = Menu.Show(
             "選擇要使用的 [yellow]profile[/]",
             () => items,
-            header: Banner.Show);
+            header: banner.Show);
 
         return idx < 0 ? null : profiles[idx];
     }

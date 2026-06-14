@@ -1,5 +1,4 @@
 using EKSchemaDiff.Core.Compare;
-using EKSchemaDiff.Core.Diagnostics;
 using EKSchemaDiff.Report;
 using Spectre.Console;
 
@@ -11,7 +10,7 @@ namespace EKSchemaDiff.Cli.Tui;
 /// </summary>
 public static class ReviewScreen
 {
-    public static HashSet<ObjectDifference>? Run(IReadOnlyList<ObjectDifference> diffs, bool ignoreWhitespace)
+    public static HashSet<ObjectDifference>? Run(IReadOnlyList<ObjectDifference> diffs, bool ignoreWhitespace, IAppLog log)
     {
         var ordered = diffs
             .OrderBy(d => d.UpdateAction switch
@@ -42,7 +41,7 @@ public static class ReviewScreen
                 catch (Exception ex)
                 {
                     // 預覽/差異繪製若失敗，記錄並跳過該格重繪，避免整個畫面崩潰把程式帶掉。
-                    Log.Error($"ReviewScreen 重繪失敗（cursor={cursor}）", ex);
+                    log.Error($"ReviewScreen 重繪失敗（cursor={cursor}）", ex);
                     ConsoleUI.BeginFrame();
                     ConsoleUI.Line("[red]預覽繪製發生錯誤，已略過此格。詳見記錄檔。[/]");
                     ConsoleUI.EndFrame();
@@ -69,7 +68,7 @@ public static class ReviewScreen
                         break;
                     case ConsoleKey.Enter:
                         var picked = Collect(ordered, included);
-                        Log.Step($"ReviewScreen 確認勾選 {picked.Count} 項");
+                        log.Step($"ReviewScreen 確認勾選 {picked.Count} 項");
                         AnsiConsole.Clear();
                         return picked;
                     case ConsoleKey.Escape:

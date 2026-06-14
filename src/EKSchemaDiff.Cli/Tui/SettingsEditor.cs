@@ -91,7 +91,7 @@ public static class SettingsEditor
     }
 
     /// <summary>編輯 profile 選項。就地切換，呼叫端負責存檔。</summary>
-    public static void Edit(Profile profile)
+    public static void Edit(Profile profile, Banner banner)
     {
         var title = $"[orange3]設定頁[/] · profile [bold]{Markup.Escape(profile.Name)}[/]";
 
@@ -126,7 +126,7 @@ public static class SettingsEditor
                 }
                 return list;
             },
-            header: Banner.Show,
+            header: banner.Show,
             footer: "[grey39]↑↓ 移動 · Enter 切換/編輯 · Esc 返回[/]",
             onActivate: idx =>
             {

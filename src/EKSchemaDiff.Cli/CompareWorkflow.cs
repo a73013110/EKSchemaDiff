@@ -4,20 +4,76 @@ using System.Threading.Tasks;
 using EKSchemaDiff.Cli.Tui;
 using EKSchemaDiff.Core.Compare;
 using EKSchemaDiff.Core.Config;
-using EKSchemaDiff.Core.Diagnostics;
 using EKSchemaDiff.Core.Export;
 using Spectre.Console;
 
 namespace EKSchemaDiff.Cli;
 
-/// <summary>比對 → 預覽勾選 → 匯出的共用流程，供主選單與 compare 命令使用。</summary>
-public static class CompareWorkflow
+/// <summary>比對 → 預覽勾選 → 匯出的共用流程，供主選單與 compare 命令使用（DI singleton）。</summary>
+public sealed class CompareWorkflow
 {
-    public static int Run(
+    private readonly IAppLog _log;
+    private readonly Banner _banner;
+    private readonly ConfigStoreFactory _configStores;
+
+    public CompareWorkflow(IAppLog log, Banner banner, ConfigStoreFactory configStores)
+    {
+        _log = log;
+        _banner = banner;
+        _configStores = configStores;
+    }
+
+    /// <summary>
+    /// 自設定探索並執行比對流程（供 compare 命令與主選單快速模式共用）：
+    /// 探索 → 驗證有 profile → 解析（互動時可挑選）→ 解析輸出形式 → 執行。
+    /// </summary>
+    public int RunFromConfig(string? startDir, string? profileName, string? outOverride, string? exportRaw, bool interactive)
+    {
+        ConfigStore store;
+        try { store = _configStores.Discover(startDir); }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[red]設定載入失敗：{ex.Message}[/]");
+            return ExitCode.UsageError;
+        }
+
+        if (store.Effective.Profiles.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]尚未設定任何 profile。[/]");
+            AnsiConsole.MarkupLine("請執行 [bold]eksd[/] 從主選單建立連線設定，或 [bold]eksd init[/] 產生範本。");
+            return ExitCode.UsageError;
+        }
+
+        Profile? profile;
+        try
+        {
+            profile = store.ResolveProfile(profileName);
+            if (profile is null)
+            {
+                if (!interactive)
+                    throw new InvalidOperationException("有多組 profile，請以 --profile 指定。");
+                profile = Prompts.PickProfile(store.Effective.Profiles, _banner);
+                if (profile is null) return ExitCode.Ok;   // 按 Esc 取消挑選
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[red]{ex.Message}[/]");
+            return ExitCode.UsageError;
+        }
+
+        DeployScriptMode? exportOverride = string.IsNullOrWhiteSpace(exportRaw)
+            ? null
+            : ParseExportMode(exportRaw!);
+
+        return Run(store, profile, outOverride, exportOverride, interactive);
+    }
+
+    public int Run(
         ConfigStore store, Profile profile,
         string? outOverride, DeployScriptMode? exportOverride, bool interactive)
     {
-        Log.Step($"開始比對流程 profile='{profile.Name}' interactive={interactive}");
+        _log.Step($"開始比對流程 profile='{profile.Name}' interactive={interactive}");
         ShowProfileSummary(profile);
 
         CompareSession? session = null;
@@ -31,9 +87,9 @@ public static class CompareWorkflow
         }
         catch (Exception ex)
         {
-            Log.Error("比對階段失敗", ex);
+            _log.Error("比對階段失敗", ex);
             AnsiConsole.MarkupLineInterpolated($"[red]比對失敗：{ex.Message}[/]");
-            return 2;
+            return EksdExitCode.CompareFailed;
         }
 
         if (session is null || !session.IsValid)
@@ -41,7 +97,7 @@ public static class CompareWorkflow
             AnsiConsole.MarkupLine("[red]比對結果無效。[/]");
             foreach (var e in session?.GetErrors() ?? Enumerable.Empty<string>())
                 AnsiConsole.MarkupLineInterpolated($"  [red]- {e}[/]");
-            return 2;
+            return EksdExitCode.CompareFailed;
         }
 
         foreach (var u in session.UnrecognizedExcludedTypes)
@@ -50,29 +106,29 @@ public static class CompareWorkflow
         if (session.Differences.Count == 0)
         {
             AnsiConsole.MarkupLine("[green]兩個資料庫結構一致，沒有差異。[/]");
-            return 0;
+            return ExitCode.Ok;
         }
 
-        Log.Step($"比對完成，差異 {session.Differences.Count} 項");
+        _log.Step($"比對完成，差異 {session.Differences.Count} 項");
         ShowDiffOverview(session);
 
         var exportMode = exportOverride ?? profile.ExportOptions.DeployScript;
 
         if (interactive)
         {
-            Log.Step("進入勾選預覽畫面 ReviewScreen");
-            var included = ReviewScreen.Run(session.Differences, profile.ExportOptions.HtmlIgnoreWhitespace);
-            Log.Step($"離開勾選預覽畫面，結果={(included is null ? "取消" : included.Count + " 項")}");
+            _log.Step("進入勾選預覽畫面 ReviewScreen");
+            var included = ReviewScreen.Run(session.Differences, profile.ExportOptions.HtmlIgnoreWhitespace, _log);
+            _log.Step($"離開勾選預覽畫面，結果={(included is null ? "取消" : included.Count + " 項")}");
             if (included is null)
             {
                 AnsiConsole.MarkupLine("[yellow]已取消，未匯出。[/]");
-                return 0;
+                return ExitCode.Ok;
             }
             session.ApplyInclusion(included);
             if (included.Count == 0)
             {
                 AnsiConsole.MarkupLine("[yellow]未勾選任何物件，已取消匯出。[/]");
-                return 0;
+                return ExitCode.Ok;
             }
             // 輸出形式一律沿用設定頁的設定（不再每次詢問，否則設定形同虛設）。
             // 需臨時改變時，用 compare --export single|perobject|both。
@@ -80,7 +136,7 @@ public static class CompareWorkflow
 
         profile.ExportOptions.DeployScript = exportMode;
         var outputDir = ResolveOutputDir(store, profile, outOverride);
-        Log.Step($"開始匯出 mode={exportMode} outputDir='{outputDir}'");
+        _log.Step($"開始匯出 mode={exportMode} outputDir='{outputDir}'");
 
         ExportSummary summary;
         try
@@ -91,7 +147,7 @@ public static class CompareWorkflow
                 if (cancelled || captured is null)
                 {
                     AnsiConsole.MarkupLine("[yellow]已中斷匯出（部分檔案可能已寫出）。[/]");
-                    return 0;
+                    return ExitCode.Ok;
                 }
                 summary = captured;
             }
@@ -102,12 +158,12 @@ public static class CompareWorkflow
         }
         catch (Exception ex)
         {
-            Log.Error("匯出階段失敗", ex);
+            _log.Error("匯出階段失敗", ex);
             AnsiConsole.MarkupLineInterpolated($"[red]匯出失敗：{ex.Message}[/]");
-            return 3;
+            return EksdExitCode.ExportFailed;
         }
 
-        Log.Step($"匯出完成，HTML {summary.HtmlReportCount} 份、逐物件部署檔 {summary.ObjectScriptCount} 個");
+        _log.Step($"匯出完成，HTML {summary.HtmlReportCount} 份、逐物件部署檔 {summary.ObjectScriptCount} 個");
         ShowExportSummary(summary);
 
         if (interactive && summary.HtmlReportCount > 0)
@@ -117,14 +173,14 @@ public static class CompareWorkflow
                 OpenFile(overview);
         }
 
-        return summary.ObjectScriptVerificationPassed ? 0 : 4;
+        return summary.ObjectScriptVerificationPassed ? ExitCode.Ok : EksdExitCode.VerificationFailed;
     }
 
     /// <summary>
     /// 在背景執行匯出，前景以自繪畫面顯示進度（含大 Logo），可按 Esc 中斷。
     /// 回傳 (摘要, 是否中斷)。中斷時摘要為 null。
     /// </summary>
-    private static (ExportSummary? Summary, bool Cancelled) RunExportWithProgress(
+    private (ExportSummary? Summary, bool Cancelled) RunExportWithProgress(
         CompareSession session, string outputDir)
     {
         using var cts = new CancellationTokenSource();
@@ -181,11 +237,11 @@ public static class CompareWorkflow
     private static readonly string[] SpinnerFrames =
         { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" };
 
-    private static void RenderExportFrame(
+    private void RenderExportFrame(
         ExportProgress p, bool cancelling, int tick, IReadOnlyList<string> history, bool done)
     {
         ConsoleUI.BeginFrame();
-        Banner.Show();
+        _banner.Show();
 
         string spin = done ? "[green]✔[/]" : $"[orange3]{SpinnerFrames[tick % SpinnerFrames.Length]}[/]";
         ConsoleUI.Line($"{spin} [orange3]產出進度[/]　[grey39]Esc 中斷[/]");

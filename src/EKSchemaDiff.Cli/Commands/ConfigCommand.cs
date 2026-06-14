@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using EKSchemaDiff.Cli.Tui;
-using EKSchemaDiff.Core.Config;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -20,9 +19,18 @@ public sealed class ConfigSettings : CommandSettings
 /// <summary>config 命令：開啟設定頁編輯 profile 的比對與輸出選項，存回設定檔。</summary>
 public sealed class ConfigCommand : Command<ConfigSettings>
 {
+    private readonly ConfigStoreFactory _configStores;
+    private readonly Banner _banner;
+
+    public ConfigCommand(ConfigStoreFactory configStores, Banner banner)
+    {
+        _configStores = configStores;
+        _banner = banner;
+    }
+
     protected override int Execute(CommandContext context, ConfigSettings settings, CancellationToken cancellationToken)
     {
-        var store = ConfigStore.Discover();
+        var store = _configStores.Discover();
         bool useGlobal = settings.Global || store.ProjectConfigPath is null;
 
         var config = useGlobal ? store.GlobalConfig : store.ProjectConfig;
@@ -30,18 +38,18 @@ public sealed class ConfigCommand : Command<ConfigSettings>
         {
             AnsiConsole.MarkupLineInterpolated(
                 $"[yellow]{(useGlobal ? "全域" : "專案")}設定沒有任何 profile。請先執行 eksd（主選單）建立連線，或 eksd init。[/]");
-            return 1;
+            return ExitCode.UsageError;
         }
 
         var profile = settings.Profile is not null
             ? config.FindProfile(settings.Profile) ?? throw new InvalidOperationException($"找不到 profile：{settings.Profile}")
-            : Prompts.PickProfile(config.Profiles);
-        if (profile is null) return 0;   // 按 Esc 取消挑選
+            : Prompts.PickProfile(config.Profiles, _banner);
+        if (profile is null) return ExitCode.Ok;   // 按 Esc 取消挑選
 
-        SettingsEditor.Edit(profile);
+        SettingsEditor.Edit(profile, _banner);
 
         var path = useGlobal ? store.SaveGlobal(config) : store.SaveProject(config);
         AnsiConsole.MarkupLineInterpolated($"[green]已儲存：{path}[/]");
-        return 0;
+        return ExitCode.Ok;
     }
 }
