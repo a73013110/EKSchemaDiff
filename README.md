@@ -155,9 +155,9 @@ eksd
   完整部署腳本.sql            # 單一完整部署 SQL（依相依順序）
   逐物件部署腳本/
     00_部署清單.csv           # 逐物件部署清單（順序、動作、類型、驗證結果）
-    01_ALTER_TABLE_dbo_DemoTable.sql
-    02_ADD_DESCRIPTION_DemoTable_DemoFlag.sql
-    03_ALTER_PROCEDURE_dbo_uspGetDemoTable.sql
+    01_ALTER_TABLE_dbo_DemoTable.sql        # 欄位變更與該欄描述併在同一檔
+    02_ALTER_PROCEDURE_dbo_uspDemoQuery.sql
+    03_ADD_DESCRIPTION_dbo_DemoLog.sql      # 只改了表描述、未動結構 → 才獨立成檔
     ...
   差異報告/
     00_比對總覽.html
