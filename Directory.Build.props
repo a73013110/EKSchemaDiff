@@ -5,6 +5,11 @@
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
+  <!-- 讓 .editorconfig 的程式碼風格規則於 build 時檢核（CONVENTIONS.md） -->
+  <PropertyGroup>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
   <!-- MinVer 版號設定 -->
   <PropertyGroup>
     <!-- Git Tag 格式：v0.1.0，程式版號顯示為 0.1.0 -->

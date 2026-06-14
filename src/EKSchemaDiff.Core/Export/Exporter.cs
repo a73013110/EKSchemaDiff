@@ -144,7 +144,7 @@ public static class Exporter
             foreach (var d in included)
             {
                 cancel.ThrowIfCancellationRequested();
-                var action = d.UpdateAction switch
+                var action = d.Kind switch
                 {
                     ChangeKind.Add => "新增",
                     ChangeKind.Change => "變更",
@@ -161,7 +161,7 @@ public static class Exporter
                 var fileName = $"{seqText}_{safe}.html";
                 WriteBom(Path.Combine(htmlDir, fileName), html);
 
-                var status = d.UpdateAction switch
+                var status = d.Kind switch
                 {
                     ChangeKind.Add => "新增物件",
                     ChangeKind.Delete => "刪除物件",

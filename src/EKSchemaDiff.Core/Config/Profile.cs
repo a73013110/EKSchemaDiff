@@ -27,10 +27,10 @@ public sealed class Profile
     public string OutputDir { get; set; } = "比對結果";
 
     [JsonPropertyName("compareOptions")]
-    public CompareOptionsConfig CompareOptions { get; set; } = new();
+    public CompareOptions CompareOptions { get; set; } = new();
 
     [JsonPropertyName("exportOptions")]
-    public ExportOptionsConfig ExportOptions { get; set; } = new();
+    public ExportOptions ExportOptions { get; set; } = new();
 
     /// <summary>
     /// 解析部署腳本／逐物件部署檔頂端 USE 要用的資料庫名稱：

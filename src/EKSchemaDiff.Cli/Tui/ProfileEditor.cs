@@ -10,10 +10,10 @@ public static class ProfileEditor
     private sealed class CancelException : Exception { }
 
     /// <summary>引導式設定一組 profile；存到專案層設定檔。回傳是否有儲存。</summary>
-    public static bool GuidedSetup(ConfigStore store)
+    public static bool GuidedSetup(ConfigStore store, Banner banner)
     {
         AnsiConsole.Clear();
-        Banner.Show();
+        banner.Show();
         AnsiConsole.MarkupLine("[orange3]新增 / 編輯連線設定[/]　[grey](設定檔放本機，可直接填明碼)[/]");
         AnsiConsole.MarkupLine("[grey39]逐欄輸入，Enter 確認該欄；任一欄位按 [bold]Esc[/] 取消並返回主選單。[/]");
         AnsiConsole.WriteLine();
@@ -92,7 +92,7 @@ public static class ProfileEditor
     /// <summary>讀一個文字欄位；按 Esc 取消整個流程。空白沿用預設。</summary>
     private static string Ask(string label, string? defaultValue)
     {
-        var input = ConsoleUi.ReadLineOrEsc($"[white]{Markup.Escape(label)}[/]", defaultValue);
+        var input = ConsoleUI.ReadLineOrEsc($"[white]{Markup.Escape(label)}[/]", defaultValue);
         if (input is null) throw new CancelException();
         return input;
     }

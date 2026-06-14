@@ -18,15 +18,24 @@ public sealed class InitSettings : CommandSettings
 
 public sealed class InitCommand : Command<InitSettings>
 {
+    private readonly AppInfo _app;
+    private readonly ConfigStoreFactory _configStores;
+
+    public InitCommand(AppInfo app, ConfigStoreFactory configStores)
+    {
+        _app = app;
+        _configStores = configStores;
+    }
+
     protected override int Execute(CommandContext context, InitSettings settings, CancellationToken cancellationToken)
     {
         var dir = settings.Dir ?? Directory.GetCurrentDirectory();
-        var path = Path.Combine(dir, ConfigStore.ProjectFileName);
+        var path = Path.Combine(dir, _app.ProjectConfigFileName);
 
         if (File.Exists(path) && !settings.Force)
         {
             AnsiConsole.MarkupLineInterpolated($"[yellow]已存在：{path}[/]（用 --force 覆寫）");
-            return 1;
+            return ExitCode.UsageError;
         }
 
         var config = new EksdConfig
@@ -62,10 +71,10 @@ public sealed class InitCommand : Command<InitSettings>
         };
 
         Directory.CreateDirectory(dir);
-        File.WriteAllText(path, ConfigStore.Serialize(config), new System.Text.UTF8Encoding(false));
+        File.WriteAllText(path, _configStores.Serialize(config), new System.Text.UTF8Encoding(false));
         AnsiConsole.MarkupLineInterpolated($"[green]已建立：{path}[/]");
         AnsiConsole.MarkupLine("請填入 [bold]server / database / user / password[/]，或執行 [bold]eksd[/] 從主選單以互動方式設定。");
         AnsiConsole.MarkupLine("[grey]提示：設定檔放在本機，可直接填明碼；若想避免明碼，password 可用 ${env:變數名}。[/]");
-        return 0;
+        return ExitCode.Ok;
     }
 }

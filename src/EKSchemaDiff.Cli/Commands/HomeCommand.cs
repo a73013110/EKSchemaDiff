@@ -1,6 +1,4 @@
 using EKSchemaDiff.Cli.Tui;
-using EKSchemaDiff.Core.Config;
-using EKSchemaDiff.Core.Diagnostics;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -9,31 +7,45 @@ namespace EKSchemaDiff.Cli.Commands;
 /// <summary>預設命令：顯示主選單。給 --profile / --yes 時直接進入比對（快速啟動/CI）。</summary>
 public sealed class HomeCommand : Command<CompareSettings>
 {
+    private readonly Banner _banner;
+    private readonly IAppLog _log;
+    private readonly ConfigStoreFactory _configStores;
+    private readonly CompareWorkflow _workflow;
+
+    public HomeCommand(Banner banner, IAppLog log, ConfigStoreFactory configStores, CompareWorkflow workflow)
+    {
+        _banner = banner;
+        _log = log;
+        _configStores = configStores;
+        _workflow = workflow;
+    }
+
     protected override int Execute(CommandContext context, CompareSettings settings, CancellationToken cancellationToken)
     {
         // 直接模式：指定 profile 或非互動時，跳過主選單。
         if (!string.IsNullOrWhiteSpace(settings.Profile) || settings.Yes)
         {
-            Banner.Show();
-            return CompareCommand.Run(settings);
+            _banner.Show();
+            return _workflow.RunFromConfig(
+                settings.StartDir, settings.Profile, settings.Out, settings.Export, interactive: !settings.Yes);
         }
 
-        if (!ConsoleUi.Interactive)
+        if (!ConsoleUI.Interactive)
         {
-            Banner.Show();
+            _banner.Show();
             AnsiConsole.MarkupLine("[yellow]目前不是互動終端機，無法顯示主選單。[/]");
             AnsiConsole.MarkupLine("請在終端機直接執行 [bold]eksd[/]，或用 [bold]eksd compare --profile <名稱>[/] 直接比對。");
-            return 1;
+            return ExitCode.UsageError;
         }
 
         while (true)
         {
             ConfigStore store;
-            try { store = ConfigStore.Discover(settings.StartDir); }
+            try { store = _configStores.Discover(settings.StartDir); }
             catch (Exception ex)
             {
                 AnsiConsole.MarkupLineInterpolated($"[red]設定載入失敗：{ex.Message}[/]");
-                return 1;
+                return ExitCode.UsageError;
             }
 
             int profileCount = store.Effective.Profiles.Count;
@@ -50,7 +62,7 @@ public sealed class HomeCommand : Command<CompareSettings>
                     new() { Label = "列出 profile", Description = "顯示目前已發現的所有 profile 與設定檔位置。" },
                     new() { Label = "離開", Description = "結束程式。" },
                 },
-                header: Banner.Show,
+                header: _banner.Show,
                 footer: $"[grey39]設定檔：{Markup.Escape(store.ProjectConfigPath ?? "(尚未建立)")}　·　profile：{profileCount}[/]");
 
             if (pick is >= 0 and <= 3) AnsiConsole.Clear();   // 進入動作前清一次（非每次按鍵，不會閃）
@@ -63,7 +75,7 @@ public sealed class HomeCommand : Command<CompareSettings>
                     Guard("設定選項", () => DoSettings(store));
                     break;
                 case 2: // 新增/編輯連線
-                    Guard("新增/編輯連線", () => { ProfileEditor.GuidedSetup(store); Pause(); });
+                    Guard("新增/編輯連線", () => { ProfileEditor.GuidedSetup(store, _banner); Pause(); });
                     break;
                 case 3: // 列出 profile
                     Guard("列出 profile", () => { ListProfiles(store); Pause(); });
@@ -72,8 +84,8 @@ public sealed class HomeCommand : Command<CompareSettings>
                 case -1:
                     AnsiConsole.Clear();
                     AnsiConsole.MarkupLine("[grey]再見。[/]");
-                    Log.Info("使用者由主選單離開");
-                    return 0;
+                    _log.Info("使用者由主選單離開");
+                    return ExitCode.Ok;
             }
         }
     }
@@ -82,27 +94,27 @@ public sealed class HomeCommand : Command<CompareSettings>
     /// 執行一個主選單動作；攔截任何例外、寫入 log 並提示，然後回到主選單而非讓整個程式關閉。
     /// 這是「比對後 Enter 程式整個關掉」這類問題的保險：就算動作內部崩潰，使用者仍留在選單且看得到原因。
     /// </summary>
-    private static void Guard(string action, Action body)
+    private void Guard(string action, Action body)
     {
-        Log.Step($"進入動作：{action}");
+        _log.Step($"進入動作：{action}");
         try
         {
             body();
-            Log.Step($"完成動作：{action}");
+            _log.Step($"完成動作：{action}");
         }
         catch (Exception ex)
         {
-            Log.Error($"動作「{action}」發生未處理例外", ex);
+            _log.Error($"動作「{action}」發生未處理例外", ex);
             try { Console.CursorVisible = true; } catch { }
             AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLineInterpolated($"[red]「{Markup.Escape(action)}」發生錯誤：{Markup.Escape(ex.Message)}[/]");
-            if (Log.FilePath is not null)
-                AnsiConsole.MarkupLineInterpolated($"[grey]完整堆疊已寫入記錄檔：{Markup.Escape(Log.FilePath)}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[red]「{action}」發生錯誤：{ex.Message}[/]");
+            if (_log.FilePath is not null)
+                AnsiConsole.MarkupLineInterpolated($"[grey]完整堆疊已寫入記錄檔：{_log.FilePath}[/]");
             Pause();
         }
     }
 
-    private static void DoCompare(ConfigStore store, CompareSettings settings)
+    private void DoCompare(ConfigStore store, CompareSettings settings)
     {
         if (store.Effective.Profiles.Count == 0)
         {
@@ -111,14 +123,14 @@ public sealed class HomeCommand : Command<CompareSettings>
             return;
         }
 
-        var profile = Prompts.PickProfile(store.Effective.Profiles);
+        var profile = Prompts.PickProfile(store.Effective.Profiles, _banner);
         if (profile is null) return;   // 按 Esc 取消挑選，回主選單
 
-        CompareWorkflow.Run(store, profile, settings.Out, null, interactive: true);
+        _workflow.Run(store, profile, settings.Out, null, interactive: true);
         Pause();
     }
 
-    private static void DoSettings(ConfigStore store)
+    private void DoSettings(ConfigStore store)
     {
         // 編輯專案層設定（沒有就退回全域）。
         bool useGlobal = store.ProjectConfigPath is null;
@@ -130,18 +142,18 @@ public sealed class HomeCommand : Command<CompareSettings>
             return;
         }
 
-        var profile = Prompts.PickProfile(config.Profiles);
+        var profile = Prompts.PickProfile(config.Profiles, _banner);
         if (profile is null) return;   // 按 Esc 取消挑選，回主選單
 
-        SettingsEditor.Edit(profile);
+        SettingsEditor.Edit(profile, _banner);
         var path = useGlobal ? store.SaveGlobal(config) : store.SaveProject(config);
         AnsiConsole.MarkupLineInterpolated($"[green]設定已儲存：{path}[/]");
         Pause();
     }
 
-    private static void ListProfiles(ConfigStore store)
+    private void ListProfiles(ConfigStore store)
     {
-        Banner.Show();
+        _banner.Show();
         AnsiConsole.MarkupLineInterpolated($"[grey]專案設定：{store.ProjectConfigPath ?? "(無)"}[/]");
         AnsiConsole.MarkupLineInterpolated($"[grey]全域設定：{store.GlobalConfigPath}[/]");
         if (store.Effective.Profiles.Count == 0) { AnsiConsole.MarkupLine("[yellow](尚無 profile)[/]"); return; }
