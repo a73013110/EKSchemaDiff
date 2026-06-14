@@ -19,7 +19,7 @@
         "auth": "integrated",
         "trustServerCertificate": true
       },
-      "outputDir": "EKSchemaDiff輸出",
+      "outputDir": "比對結果",
       "compareOptions": {
         "ignorePermissions": true,
         "dropPermissionsNotInSource": false,
@@ -59,7 +59,7 @@
         "password": "${env:EKSD_UAT_PWD}",
         "trustServerCertificate": true
       },
-      "outputDir": "EKSchemaDiff輸出",
+      "outputDir": "比對結果",
       "compareOptions": {
         "ignorePermissions": true,
         "excludedObjectTypes": ["Permissions", "Users", "Logins", "RoleMembership", "Credentials"]
@@ -67,9 +67,8 @@
       "exportOptions": {
         "deployScript": "Both",
         "exportHtml": true,
-		"deployDatabaseName": null,
-        "htmlIgnoreWhitespace": false,
-        "groupSplitByObject": true
+        "deployDatabaseName": null,
+        "htmlIgnoreWhitespace": false
       }
     }
   ]

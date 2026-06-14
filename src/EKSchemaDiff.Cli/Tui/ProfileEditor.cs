@@ -37,7 +37,7 @@ public static class ProfileEditor
             profile.Target = PromptConnection(profile.Target);
 
             profile.OutputDir = Ask("輸出目錄：",
-                string.IsNullOrWhiteSpace(profile.OutputDir) ? "EKSchemaDiff輸出" : profile.OutputDir);
+                string.IsNullOrWhiteSpace(profile.OutputDir) ? "比對結果" : profile.OutputDir);
 
             if (existing is null) config.Profiles.Add(profile);
             if (string.IsNullOrWhiteSpace(config.DefaultProfile)) config.DefaultProfile = profile.Name;

@@ -24,7 +24,7 @@ public sealed class Profile
 
     /// <summary>輸出根目錄。可為相對路徑（相對於設定檔所在目錄）。</summary>
     [JsonPropertyName("outputDir")]
-    public string OutputDir { get; set; } = "EKSchemaDiff輸出";
+    public string OutputDir { get; set; } = "比對結果";
 
     [JsonPropertyName("compareOptions")]
     public CompareOptionsConfig CompareOptions { get; set; } = new();
@@ -33,7 +33,7 @@ public sealed class Profile
     public ExportOptionsConfig ExportOptions { get; set; } = new();
 
     /// <summary>
-    /// 解析部署腳本/切分檔頂端 USE 要用的資料庫名稱：
+    /// 解析部署腳本／逐物件部署檔頂端 USE 要用的資料庫名稱：
     /// 優先用 ExportOptions.DeployDatabaseName（覆寫），否則用目標資料庫名稱。
     /// </summary>
     public string ResolveDeployDatabaseName()

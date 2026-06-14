@@ -1,4 +1,4 @@
-using EKSchemaDiff.Core.Splitting;
+using EKSchemaDiff.Core.Scripting;
 using EKSchemaDiff.Report;
 
 // 離線驗證「逐物件腳本整理器」與 HTML 報告（不需連線資料庫）。
@@ -39,7 +39,7 @@ if (Directory.Exists(outDir)) Directory.Delete(outDir, true);
 Directory.CreateDirectory(outDir);
 
 // 1) 逐物件整理（USE 覆寫成 App_PROD，模擬 deployDatabaseName）
-var f = ScriptSplitter.BuildObjectFile(singleObject, "App_PROD", "[dbo].[DemoTable]");
+var f = DeployScriptBuilder.BuildObjectFile(singleObject, "App_PROD", "[dbo].[DemoTable]");
 Console.WriteLine("=== 逐物件整理結果 ===");
 Console.WriteLine($"  檔名：{f.FileName}");
 Console.WriteLine($"  動作/類型/名稱：{f.Action} / {f.ObjectType} / {f.ObjectName}");
@@ -108,8 +108,8 @@ EXECUTE sp_refreshsqlmodule N'[dbo].[vwDemoQuery01]';
 GO
 """;
 
-var cleanedFull = ScriptSplitter.CleanFullScript(fullScript, "Sample_DB_PROD");
-File.WriteAllText(Path.Combine(outDir, "FullScript.sql"), cleanedFull, new System.Text.UTF8Encoding(true));
+var cleanedFull = DeployScriptBuilder.CleanFullScript(fullScript, "Sample_DB_PROD");
+File.WriteAllText(Path.Combine(outDir, "完整部署腳本.sql"), cleanedFull, new System.Text.UTF8Encoding(true));
 bool fullStartsWithUse = cleanedFull.TrimStart().StartsWith("USE [Sample_DB_PROD];", StringComparison.Ordinal);
 bool fullNoSqlCmd = !cleanedFull.Contains(":setvar") && !cleanedFull.Contains(":on error")
                     && !cleanedFull.Contains("$(DatabaseName)") && !cleanedFull.Contains("NOEXEC");

@@ -1,7 +1,7 @@
 using System.Text;
 using EKSchemaDiff.Core.Compare;
 using EKSchemaDiff.Core.Config;
-using EKSchemaDiff.Core.Splitting;
+using EKSchemaDiff.Core.Scripting;
 using EKSchemaDiff.Report;
 
 namespace EKSchemaDiff.Core.Export;
@@ -10,10 +10,10 @@ public sealed class ExportSummary
 {
     public string OutputDir { get; init; } = "";
     public string? FullScriptPath { get; set; }
-    public int SplitFileCount { get; set; }
+    public int ObjectScriptCount { get; set; }
     public int HtmlReportCount { get; set; }
-    public bool SplitVerificationPassed { get; set; } = true;
-    public string? SplitVerificationMessage { get; set; }
+    public bool ObjectScriptVerificationPassed { get; set; } = true;
+    public string? ObjectScriptVerificationMessage { get; set; }
     public bool Cancelled { get; set; }
     public List<string> Warnings { get; } = new();
 }
@@ -22,7 +22,7 @@ public sealed class ExportSummary
 public readonly record struct ExportProgress(string Phase, string Item, int Current, int Total);
 
 /// <summary>
-/// 將比對結果落地：產生部署 SQL（單一/切分/兩者）與暖色差異 HTML。
+/// 將比對結果落地：產生部署 SQL（完整／逐物件／兩者）與暖色差異 HTML。
 /// 輸出方向：HTML 左側=更版(來源)、右側=原版(目標)。
 /// </summary>
 public static class Exporter
@@ -59,8 +59,8 @@ public static class Exporter
         var included = session.Differences.Where(d => d.Included).ToList();
 
         bool doFull = export.DeployScript is DeployScriptMode.Single or DeployScriptMode.Both;
-        bool doSplit = export.DeployScript is DeployScriptMode.SplitOrdered or DeployScriptMode.Both;
-        int total = (doFull ? 1 : 0) + (doSplit ? included.Count : 0) + (export.ExportHtml ? included.Count : 0);
+        bool doPerObject = export.DeployScript is DeployScriptMode.PerObject or DeployScriptMode.Both;
+        int total = (doFull ? 1 : 0) + (doPerObject ? included.Count : 0) + (export.ExportHtml ? included.Count : 0);
         int done = 0;
         void Report(string phase, string item) => report?.Invoke(new ExportProgress(phase, item, done, total));
 
@@ -72,23 +72,23 @@ public static class Exporter
         if (doFull)
         {
             cancel.ThrowIfCancellationRequested();
-            Report("產生單一部署 SQL", "FullScript.sql");
+            Report("產生完整部署腳本", "完整部署腳本.sql");
             // 清掉 DacFx 的 SQLCMD 樣板（:setvar/:on error/SQLCMD 偵測）與註解標頭，
-            // 改套統一 USE [部署庫] 標頭，與切分檔一致，可直接執行。
-            var fullScript = ScriptSplitter.CleanFullScript(session.GenerateScript(), targetDb);
-            var path = Path.Combine(outputDir, "FullScript.sql");
+            // 改套統一 USE [部署庫] 標頭，與逐物件部署檔一致，可直接執行。
+            var fullScript = DeployScriptBuilder.CleanFullScript(session.GenerateScript(), targetDb);
+            var path = Path.Combine(outputDir, "完整部署腳本.sql");
             WriteBom(path, fullScript);
             summary.FullScriptPath = path;
             done++;
-            Report("產生單一部署 SQL", "FullScript.sql");
+            Report("產生完整部署腳本", "完整部署腳本.sql");
         }
 
-        if (doSplit)
+        if (doPerObject)
         {
             // 逐物件：對每個納入的物件，由 DacFx 官方引擎單獨產生腳本（含其描述、相依刷新…由引擎決定），
             // 再整理成乾淨單檔。等同 VS「結構描述比較」逐物件勾選匯出，沒有跨物件歸屬猜測。
-            var splitDir = Path.Combine(outputDir, "切分SQL");
-            CleanDirectory(splitDir, "*.sql", "*.csv");   // 清掉上一輪殘留，避免新舊檔混雜
+            var objectScriptDir = Path.Combine(outputDir, "逐物件部署腳本");
+            CleanDirectory(objectScriptDir, "*.sql", "*.csv");   // 清掉上一輪殘留，避免新舊檔混雜
 
             var csv = new StringBuilder();
             csv.AppendLine("Sequence,Action,ObjectType,ObjectName,OperationBatches,Verified,FileName");
@@ -108,9 +108,9 @@ public static class Exporter
                     continue;
                 }
 
-                var f = ScriptSplitter.BuildObjectFile(script, targetDb, diff.Name);
+                var f = DeployScriptBuilder.BuildObjectFile(script, targetDb, diff.Name);
                 var fileName = $"{seqText}_{f.FileName}";
-                WriteBom(Path.Combine(splitDir, fileName), f.Content);
+                WriteBom(Path.Combine(objectScriptDir, fileName), f.Content);
 
                 if (!f.VerificationPassed)
                 {
@@ -121,16 +121,16 @@ public static class Exporter
                 csv.AppendLine($"{seqText},{f.Action},{f.ObjectType}," +
                                $"\"{f.ObjectName.Replace("\"", "\"\"")}\",{f.OperationBatchCount}," +
                                $"{(f.VerificationPassed ? "OK" : "FAIL")},{fileName}");
-                summary.SplitFileCount++;
+                summary.ObjectScriptCount++;
                 seq++; done++;
                 Report("產生逐物件部署檔", $"{seqText}　{diff.Name}");
             }
             session.RestoreInclusion(included);
-            File.WriteAllText(Path.Combine(splitDir, "00_切分摘要.csv"), csv.ToString(), Utf8Bom);
+            File.WriteAllText(Path.Combine(objectScriptDir, "00_部署清單.csv"), csv.ToString(), Utf8Bom);
 
-            summary.SplitVerificationPassed = failed == 0;
+            summary.ObjectScriptVerificationPassed = failed == 0;
             if (failed > 0)
-                summary.SplitVerificationMessage = $"{failed} 個物件檔驗證未過。";
+                summary.ObjectScriptVerificationMessage = $"{failed} 個物件檔驗證未過。";
         }
 
         // 2) 差異 HTML
@@ -157,7 +157,7 @@ public static class Exporter
                     d.Name, action, d.SourceScript, d.TargetScript,
                     export.HtmlIgnoreWhitespace, generatedAt);
 
-                var safe = ScriptSplitter.ConvertToSafeName(d.Name);
+                var safe = DeployScriptBuilder.ConvertToSafeName(d.Name);
                 var fileName = $"{seqText}_{safe}.html";
                 WriteBom(Path.Combine(htmlDir, fileName), html);
 
@@ -183,7 +183,7 @@ public static class Exporter
 
             var overview = HtmlReportBuilder.BuildOverview(
                 indexRows, profile.Name, generatedAt, summary.Warnings);
-            WriteBom(Path.Combine(htmlDir, "00_差異比對總覽.html"), overview);
+            WriteBom(Path.Combine(htmlDir, "00_比對總覽.html"), overview);
             summary.HtmlReportCount = indexRows.Count;
         }
 

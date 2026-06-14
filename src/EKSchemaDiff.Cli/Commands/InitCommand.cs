@@ -56,7 +56,7 @@ public sealed class InitCommand : Command<InitSettings>
                         User = "your_account",
                         Password = "your_password",
                     },
-                    OutputDir = "EKSchemaDiff輸出",
+                    OutputDir = "比對結果",
                 },
             },
         };

@@ -75,7 +75,7 @@ public static class CompareWorkflow
                 return 0;
             }
             // 輸出形式一律沿用設定頁的設定（不再每次詢問，否則設定形同虛設）。
-            // 需臨時改變時，用 compare --export single|split|both。
+            // 需臨時改變時，用 compare --export single|perobject|both。
         }
 
         profile.ExportOptions.DeployScript = exportMode;
@@ -107,17 +107,17 @@ public static class CompareWorkflow
             return 3;
         }
 
-        Log.Step($"匯出完成，HTML {summary.HtmlReportCount} 份、切分檔 {summary.SplitFileCount} 個");
+        Log.Step($"匯出完成，HTML {summary.HtmlReportCount} 份、逐物件部署檔 {summary.ObjectScriptCount} 個");
         ShowExportSummary(summary);
 
         if (interactive && summary.HtmlReportCount > 0)
         {
-            var overview = Path.Combine(outputDir, "差異報告", "00_差異比對總覽.html");
-            if (File.Exists(overview) && AnsiConsole.Confirm("要開啟差異比對總覽 HTML 嗎？", defaultValue: false))
+            var overview = Path.Combine(outputDir, "差異報告", "00_比對總覽.html");
+            if (File.Exists(overview) && AnsiConsole.Confirm("要開啟比對總覽 HTML 嗎？", defaultValue: false))
                 OpenFile(overview);
         }
 
-        return summary.SplitVerificationPassed ? 0 : 4;
+        return summary.ObjectScriptVerificationPassed ? 0 : 4;
     }
 
     /// <summary>
@@ -281,13 +281,13 @@ public static class CompareWorkflow
         table.AddColumn("項目");
         table.AddColumn("結果");
         if (summary.FullScriptPath is not null)
-            table.AddRow("單一部署 SQL", Markup.Escape(summary.FullScriptPath));
-        if (summary.SplitFileCount > 0)
+            table.AddRow("完整部署腳本", Markup.Escape(summary.FullScriptPath));
+        if (summary.ObjectScriptCount > 0)
         {
-            var v = summary.SplitVerificationPassed
+            var v = summary.ObjectScriptVerificationPassed
                 ? "[green]整理驗證通過[/]"
-                : $"[red]驗證未過：{Markup.Escape(summary.SplitVerificationMessage ?? "")}[/]";
-            table.AddRow("逐物件部署檔", $"{summary.SplitFileCount} 個　{v}");
+                : $"[red]驗證未過：{Markup.Escape(summary.ObjectScriptVerificationMessage ?? "")}[/]";
+            table.AddRow("逐物件部署檔", $"{summary.ObjectScriptCount} 個　{v}");
         }
         if (summary.HtmlReportCount > 0)
             table.AddRow("差異 HTML", $"{summary.HtmlReportCount} 份 + 總覽");
@@ -311,9 +311,9 @@ public static class CompareWorkflow
     public static DeployScriptMode ParseExportMode(string s) => s.Trim().ToLowerInvariant() switch
     {
         "single" => DeployScriptMode.Single,
-        "split" => DeployScriptMode.SplitOrdered,
+        "perobject" or "split" => DeployScriptMode.PerObject,   // split 為舊值別名，向後相容
         "both" => DeployScriptMode.Both,
-        _ => throw new InvalidOperationException($"未知的 --export 值：{s}（可用 single|split|both）"),
+        _ => throw new InvalidOperationException($"未知的 --export 值：{s}（可用 single|perobject|both）"),
     };
 
     private static void OpenFile(string path)

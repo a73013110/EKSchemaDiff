@@ -59,8 +59,10 @@ nunit-*.xml
 # EKSchemaDiff 專屬
 publish/
 .smoketest/
-EKSchemaDiff輸出/
+比對結果/
 # 本機實際設定檔可能含連線資訊；範例請放 samples/
+
+# 個人設定
 /.eksd.json
 /.vs
 *.pubxml.user

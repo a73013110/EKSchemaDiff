@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace EKSchemaDiff.Core.Splitting;
+namespace EKSchemaDiff.Core.Scripting;
 
 /// <summary>單一物件的部署檔：由 DacFx 逐物件腳本清理而來。</summary>
 public sealed class ObjectScriptFile
@@ -20,9 +20,10 @@ public sealed class ObjectScriptFile
 /// 把 DacFx「單一物件」的 GenerateScript() 輸出整理成乾淨、可直接執行的單檔：
 /// 去除 SQLCMD 部署樣板（:setvar/:on error/SQLCMD 偵測）、PRINT 進度與原 USE，
 /// 改套統一的 USE [部署庫] + 必要 SET 標頭，其餘操作批次（DDL、描述、相依刷新…由 DacFx 決定）原樣保留。
-/// 不做跨物件切分（每個檔本來就只含一個物件），因此沒有歸屬猜測的風險。
+/// 每個檔「以單一物件為主」，但 DacFx 可能一併帶入該物件所依賴、且同樣有變更的前置物件
+/// （例如函式依賴的檢視），以確保此檔可獨立執行；這些都由官方引擎決定，沒有我們自己猜測歸屬的風險。
 /// </summary>
-public static partial class ScriptSplitter
+public static partial class DeployScriptBuilder
 {
     private const string CrLf = "\r\n";
 
@@ -108,7 +109,7 @@ public static partial class ScriptSplitter
     }
 
     /// <summary>
-    /// 把完整部署腳本（DacFx 的 GenerateScript 輸出）清成與切分檔一致的乾淨單檔：
+    /// 把完整部署腳本（DacFx 的 GenerateScript 輸出）清成與逐物件部署檔一致的乾淨單檔：
     /// 去除 SQLCMD 樣板、註解標頭、PRINT 進度與原 USE，改套統一的 USE [部署庫] + 必要 SET 標頭，
     /// 其餘所有操作批次（依相依順序）原樣保留。
     /// </summary>

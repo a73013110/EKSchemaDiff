@@ -60,7 +60,7 @@ public static class SettingsEditor
         {
             new Row("部署 SQL 輸出形式", p => Plain(p.ExportOptions.DeployScript.ToString()),
                 p => p.ExportOptions.DeployScript = Cycle(p.ExportOptions.DeployScript),
-                "Both＝單一檔＋切分檔；Single＝只單一檔；SplitOrdered＝只切分檔。Enter 循環切換。"),
+                "Both＝完整部署腳本＋逐物件部署檔；Single＝只完整部署腳本；PerObject＝只逐物件部署檔。Enter 循環切換。"),
             new Row("部署資料庫名稱（USE 覆寫）",
                 p => Plain(string.IsNullOrWhiteSpace(p.ExportOptions.DeployDatabaseName) ? "(沿用目標庫名)" : p.ExportOptions.DeployDatabaseName!),
                 EditDeployDb,
@@ -172,7 +172,7 @@ public static class SettingsEditor
     private static DeployScriptMode Cycle(DeployScriptMode m) => m switch
     {
         DeployScriptMode.Both => DeployScriptMode.Single,
-        DeployScriptMode.Single => DeployScriptMode.SplitOrdered,
+        DeployScriptMode.Single => DeployScriptMode.PerObject,
         _ => DeployScriptMode.Both,
     };
 }

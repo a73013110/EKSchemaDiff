@@ -5,11 +5,11 @@ namespace EKSchemaDiff.Core.Config;
 /// <summary>部署 SQL 的輸出形式。</summary>
 public enum DeployScriptMode
 {
-    /// <summary>只輸出單一完整檔 FullScript.sql。</summary>
+    /// <summary>只輸出單一完整部署腳本（完整部署腳本.sql）。</summary>
     Single,
-    /// <summary>只輸出依相依順序切分的個別編號檔。</summary>
-    SplitOrdered,
-    /// <summary>同時輸出單一檔與切分檔（預設）。</summary>
+    /// <summary>只輸出依相依順序編號的逐物件部署檔。</summary>
+    PerObject,
+    /// <summary>同時輸出完整部署腳本與逐物件部署檔（預設）。</summary>
     Both,
 }
 
@@ -29,7 +29,7 @@ public sealed class ExportOptionsConfig
     public bool HtmlIgnoreWhitespace { get; set; } = false;
 
     /// <summary>
-    /// 部署腳本與切分檔頂端 USE 要使用的資料庫名稱（覆寫）。
+    /// 完整部署腳本與逐物件部署檔頂端 USE 要使用的資料庫名稱（覆寫）。
     /// 留空時沿用目標資料庫名稱。適用情境：你內部目標庫叫 A，但客戶端實際庫名是 B，
     /// 交付給客戶執行的腳本要 USE [B]。
     /// </summary>
