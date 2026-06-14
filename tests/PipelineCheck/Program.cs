@@ -120,6 +120,36 @@ bool fullNoComment = !cleanedFull.Contains("此程式碼是由工具所產生");
 Console.WriteLine($"\n=== 完整腳本清理 CleanFullScript ===");
 Console.WriteLine($"  USE開頭={fullStartsWithUse}；去SQLCMD={fullNoSqlCmd}；去PRINT={fullNoPrint}；保留操作={fullKeptOps}；去註解標頭={fullNoComment}");
 
+// 2.7) LayeredConfigStore 離線測試（探索往上層、全域+專案合併、存檔 round-trip；不碰真實使用者目錄）
+var cfgRoot = Path.Combine(outDir, "config-test");
+var cfgGlobal = Path.Combine(cfgRoot, "global.json");
+var cfgSub = Path.Combine(cfgRoot, "proj", "sub");
+Directory.CreateDirectory(cfgSub);
+Directory.CreateDirectory(Path.GetDirectoryName(cfgGlobal)!);
+File.WriteAllText(cfgGlobal, """{"items":["g1"]}""");
+File.WriteAllText(Path.Combine(cfgRoot, "proj", ".test.json"), """{"items":["p1"]}""");
+
+var cfgOptions = new ConsoleKit.Configuration.LayeredConfigOptions
+{
+    ProjectFileName = ".test.json",
+    GlobalConfigPath = cfgGlobal,
+    JsonOptions = new System.Text.Json.JsonSerializerOptions { WriteIndented = true },
+};
+var cfgStore = new ConsoleKit.Configuration.LayeredConfigStore<TestConfig>(
+    cfgOptions,
+    () => new TestConfig(),
+    (g, p) => new TestConfig { Items = (g?.Items ?? new()).Concat(p?.Items ?? new()).ToList() });
+
+var snap = cfgStore.Discover(cfgSub);   // 從子目錄起，應往上層找到 proj/.test.json
+bool cfgFoundProject = snap.ProjectConfigPath is not null && snap.ProjectConfigPath.EndsWith(".test.json", StringComparison.Ordinal);
+bool cfgMerged = snap.Effective.Items.Contains("g1") && snap.Effective.Items.Contains("p1");
+var savedPath = snap.SaveProject(new TestConfig { Items = { "p2" } });
+var reread = cfgStore.Discover(cfgSub);
+bool cfgRoundTrip = File.Exists(savedPath) && reread.ProjectConfig is not null && reread.ProjectConfig.Items.Contains("p2");
+
+Console.WriteLine($"\n=== LayeredConfigStore 離線測試 ===");
+Console.WriteLine($"  探索往上層={cfgFoundProject}；全域+專案合併={cfgMerged}；存檔 round-trip={cfgRoundTrip}");
+
 // 3) 總覽
 var overview = HtmlReportBuilder.BuildOverview(
     new[]
@@ -134,6 +164,13 @@ Console.WriteLine($"\n所有輸出：{outDir}");
 
 bool ok = f.VerificationPassed && usesOverrideDb && keptAlter && keptDesc
           && strippedSqlCmd && strippedPrint && namedAlterTable && !hasPerm && diffCount >= 1
-          && fullStartsWithUse && fullNoSqlCmd && fullNoPrint && fullKeptOps && fullNoComment;
+          && fullStartsWithUse && fullNoSqlCmd && fullNoPrint && fullKeptOps && fullNoComment
+          && cfgFoundProject && cfgMerged && cfgRoundTrip;
 Console.WriteLine($"\n整體：{(ok ? "PASS" : "FAIL")}");
 return ok ? 0 : 1;
+
+sealed class TestConfig
+{
+    [System.Text.Json.Serialization.JsonPropertyName("items")]
+    public List<string> Items { get; set; } = new();
+}
