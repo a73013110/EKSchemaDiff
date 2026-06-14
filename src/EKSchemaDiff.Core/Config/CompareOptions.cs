@@ -7,7 +7,7 @@ namespace EKSchemaDiff.Core.Config;
 /// 比對／部署選項，對應 DacFx 的 DacDeployOptions。預設值以「安全發版」為準。
 /// 最關鍵的是 IgnorePermissions：杜絕「用無權限的開發庫比對正式庫，產出移除權限 SQL」的事故。
 /// </summary>
-public sealed class CompareOptionsConfig
+public sealed class CompareOptions
 {
     /// <summary>不比對/不產生 GRANT/DENY/REVOKE。預設 true（安全）。</summary>
     [JsonPropertyName("ignorePermissions")]
@@ -88,7 +88,7 @@ public sealed class CompareOptionsConfig
         return result.ToArray();
     }
 
-    public CompareOptionsConfig Clone() => new()
+    public CompareOptions Clone() => new()
     {
         IgnorePermissions = IgnorePermissions,
         DropPermissionsNotInSource = DropPermissionsNotInSource,

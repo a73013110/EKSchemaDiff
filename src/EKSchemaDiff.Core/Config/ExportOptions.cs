@@ -14,7 +14,7 @@ public enum DeployScriptMode
 }
 
 /// <summary>輸出選項。</summary>
-public sealed class ExportOptionsConfig
+public sealed class ExportOptions
 {
     [JsonPropertyName("deployScript")]
     [JsonConverter(typeof(JsonStringEnumConverter<DeployScriptMode>))]
@@ -36,7 +36,7 @@ public sealed class ExportOptionsConfig
     [JsonPropertyName("deployDatabaseName")]
     public string? DeployDatabaseName { get; set; }
 
-    public ExportOptionsConfig Clone() => new()
+    public ExportOptions Clone() => new()
     {
         DeployScript = DeployScript,
         ExportHtml = ExportHtml,

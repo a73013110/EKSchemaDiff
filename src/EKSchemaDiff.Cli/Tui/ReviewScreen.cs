@@ -13,7 +13,7 @@ public static class ReviewScreen
     public static HashSet<ObjectDifference>? Run(IReadOnlyList<ObjectDifference> diffs, bool ignoreWhitespace, IAppLog log)
     {
         var ordered = diffs
-            .OrderBy(d => d.UpdateAction switch
+            .OrderBy(d => d.Kind switch
             {
                 ChangeKind.Add => 0, ChangeKind.Change => 1, ChangeKind.Delete => 2, _ => 3,
             })
@@ -110,7 +110,7 @@ public static class ReviewScreen
         for (int i = top; i < Math.Min(items.Count, top + listRows); i++)
         {
             var d = items[i];
-            var (icon, color) = d.UpdateAction switch
+            var (icon, color) = d.Kind switch
             {
                 ChangeKind.Add => ("+", "green"),
                 ChangeKind.Change => ("~", "yellow"),
@@ -129,7 +129,7 @@ public static class ReviewScreen
         // 分隔 + 預覽
         ConsoleUI.Line($"[grey39]{new string('-', Math.Max(10, w - 1))}[/]");
         var cur = items[cursor];
-        var action = cur.UpdateAction switch
+        var action = cur.Kind switch
         {
             ChangeKind.Add => "新增", ChangeKind.Change => "變更",
             ChangeKind.Delete => "刪除", _ => "其他",

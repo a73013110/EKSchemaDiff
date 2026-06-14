@@ -23,7 +23,7 @@ public sealed class ObjectDifference
     internal ObjectDifference(SchemaDifference diff)
     {
         _diff = diff;
-        UpdateAction = diff.UpdateAction switch
+        Kind = diff.UpdateAction switch
         {
             SchemaUpdateAction.Add => ChangeKind.Add,
             SchemaUpdateAction.Change => ChangeKind.Change,
@@ -45,7 +45,8 @@ public sealed class ObjectDifference
     /// <summary>物件類型顯示名，如 Tables、Procedures。</summary>
     public string ObjectTypeName { get; }
 
-    public ChangeKind UpdateAction { get; }
+    /// <summary>變更種類（新增／變更／刪除）。對應底層 DacFx 的 SchemaUpdateAction。</summary>
+    public ChangeKind Kind { get; }
 
     /// <summary>是否納入此次部署（對應 DacFx Included）。</summary>
     public bool Included

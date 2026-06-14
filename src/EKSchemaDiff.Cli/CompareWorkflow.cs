@@ -320,9 +320,9 @@ public sealed class CompareWorkflow
 
     private static void ShowDiffOverview(CompareSession session)
     {
-        int add = session.Differences.Count(d => d.UpdateAction == ChangeKind.Add);
-        int chg = session.Differences.Count(d => d.UpdateAction == ChangeKind.Change);
-        int del = session.Differences.Count(d => d.UpdateAction == ChangeKind.Delete);
+        int add = session.Differences.Count(d => d.Kind == ChangeKind.Add);
+        int chg = session.Differences.Count(d => d.Kind == ChangeKind.Change);
+        int del = session.Differences.Count(d => d.Kind == ChangeKind.Delete);
         AnsiConsole.MarkupLineInterpolated(
             $"找到 [bold]{session.Differences.Count}[/] 項差異：[green]+{add} 新增[/]　[yellow]~{chg} 變更[/]　[red]-{del} 刪除[/]");
         AnsiConsole.WriteLine();
