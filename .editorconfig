@@ -1,0 +1,42 @@
+# EKSchemaDiff / ConsoleKit 編碼風格（搭配 Directory.Build.props 的 EnforceCodeStyleInBuild）
+# 機械可強制的規則放這裡；縮寫大小寫（CONVENTIONS.md §B）與繁中用語（§H）靠 code review。
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+charset = utf-8-bom
+
+# using 置於命名空間外、System 優先
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning
+
+# 一律 file-scoped namespace（本專案全數遵循；違反即 build 警告）
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_diagnostic.IDE0161.severity = warning
+
+# 私有實例欄位 _camelCase
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_rule.private_fields_underscore.severity = suggestion
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# 公開成員 PascalCase
+dotnet_naming_rule.public_members_pascal.symbols = public_members
+dotnet_naming_rule.public_members_pascal.style = pascal
+dotnet_naming_rule.public_members_pascal.severity = suggestion
+dotnet_naming_symbols.public_members.applicable_kinds = property,method,field,event
+dotnet_naming_symbols.public_members.applicable_accessibilities = public
+dotnet_naming_style.pascal.capitalization = pascal_case
+
+[*.{csproj,props,targets,slnx}]
+indent_style = space
+indent_size = 2
+
+[*.{json,jsonc}]
+indent_style = space
+indent_size = 2

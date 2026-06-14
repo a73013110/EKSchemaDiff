@@ -182,12 +182,32 @@ eksd
 
 ```
 src/
-  EKSchemaDiff.Core/     # DacFx 比對包裝、設定、比對選項、部署腳本產生器
-  EKSchemaDiff.Report/   # LCS 差異引擎 + 暖色 HTML 樣板
-  EKSchemaDiff.Cli/      # Spectre.Console 互動 TUI 與命令
+  ConsoleKit/            # ★ 中性 CLI 骨架（零領域品牌）：Host、輕量 DI、TUI、記錄器、分層設定
+    AppInfo / ExitCode
+    Hosting/             # ConsoleHost、ServiceCollectionTypeRegistrar、NativeConsole
+    Tui/                 # ConsoleUI、Menu、MenuItem、Banner、TextInput
+    Diagnostics/         # IAppLog、FileAppLog
+    Configuration/       # LayeredConfigStore<T>、LayeredConfigSnapshot、LayeredConfigOptions
+  EKSchemaDiff.Core/     # DacFx 比對包裝、設定模型、比對選項、部署腳本產生器（不依賴 ConsoleKit）
+  EKSchemaDiff.Report/   # LCS 差異引擎 + 暖色 HTML 樣板（零依賴）
+  EKSchemaDiff.Cli/      # 領域命令、TUI 領域畫面、ConfigStore/工廠、比對流程
+    EksdApp / EksdExitCode
 tests/
-  PipelineCheck/         # 離線管線測試（部署腳本產生器 + 報告，免連線）
+  PipelineCheck/         # 離線管線測試（部署腳本產生器 + 報告 + 分層設定，免連線）
 ```
+
+依賴方向：`ConsoleKit ⟂ Core`（互不依賴）；`Report` 零依賴；`Core` 參考 `Report`；`Cli` 參考三者並作為組合根。命名與用語規範見 [CONVENTIONS.md](CONVENTIONS.md)。
+
+### 拆版到新 CLI（複用 ConsoleKit）
+
+`ConsoleKit/` 內**不含任何 EKSchemaDiff 品牌字串**，可整包複製到新專案後照下列步驟接上領域邏輯：
+
+1. 複製 `ConsoleKit/` 專案，於新 CLI 的 `.csproj` 參考它（設定自己的 `AssemblyName`/`Product`/`Authors`）。
+2. 寫一份 `AppInfo`（執行檔名、顯示名、標語、設定檔名、log 環境變數等品牌與路徑）。
+3. `Program.cs` 呼叫 `ConsoleHost.Run<TDefaultCommand>(MyApp.Info, args, configureServices, configureCommands)`，在兩個委派裡註冊領域服務與命令。
+4. 撰寫領域命令（建構式注入 `AppInfo`/`IAppLog`/`Banner`/自家服務）與命令文字。
+
+骨架的 Host、輕量 DI、無閃爍 TUI、檔案記錄器、分層設定探索皆可直接沿用，無須改動。
 
 ## 授權
 
