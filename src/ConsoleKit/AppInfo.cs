@@ -7,34 +7,34 @@ namespace ConsoleKit;
 /// </summary>
 public sealed record AppInfo
 {
-    /// <summary>可執行檔／命令名稱（如 eksd），用於命令列說明與提示。</summary>
+    /// <summary>可執行檔／命令名稱（如 myapp），用於命令列說明與提示。</summary>
     public required string ExecutableName { get; init; }
 
-    /// <summary>顯示名稱（如 EKSchemaDiff），用於 Banner 大字 Logo。</summary>
+    /// <summary>顯示名稱（如 MyApp），用於 Banner 大字 Logo。</summary>
     public required string DisplayName { get; init; }
 
-    /// <summary>主標語（如「SQL Server 結構比對」）。</summary>
+    /// <summary>主標語（顯示於 Banner 規則線）。</summary>
     public string PrimaryTagline { get; init; } = string.Empty;
 
-    /// <summary>次標語（如「發版差異 CLI」）。</summary>
+    /// <summary>次標語（顯示於 Banner 規則線）。</summary>
     public string SecondaryTagline { get; init; } = string.Empty;
 
-    /// <summary>作者署名（如 Yikai）。</summary>
+    /// <summary>作者署名。</summary>
     public string Author { get; init; } = string.Empty;
 
-    /// <summary>專案層設定檔名（如 .eksd.json）。</summary>
+    /// <summary>專案層設定檔名（如 .myapp.json）。</summary>
     public string ProjectConfigFileName { get; init; } = string.Empty;
 
-    /// <summary>全域設定的使用者目錄子資料夾（如 .eksd）。</summary>
+    /// <summary>全域設定的使用者目錄子資料夾（如 .myapp）。</summary>
     public string GlobalConfigSubdir { get; init; } = string.Empty;
 
     /// <summary>全域設定檔名（如 config.json）。</summary>
     public string GlobalConfigFileName { get; init; } = string.Empty;
 
-    /// <summary>記錄目錄覆寫用的環境變數名（如 EKSD_LOG_DIR）。</summary>
+    /// <summary>記錄目錄覆寫用的環境變數名（如 MYAPP_LOG_DIR）。</summary>
     public string LogDirEnvVar { get; init; } = string.Empty;
 
-    /// <summary>記錄檔名前綴（如 eksd → eksd-yyyyMMdd.log）。預設沿用 <see cref="ExecutableName"/>。</summary>
+    /// <summary>記錄檔名前綴（如 myapp → myapp-yyyyMMdd.log）。預設沿用 <see cref="ExecutableName"/>。</summary>
     public string? LogFilePrefix { get; init; }
 
     /// <summary>全域設定檔完整路徑：%USERPROFILE%\&lt;GlobalConfigSubdir&gt;\&lt;GlobalConfigFileName&gt;。</summary>
