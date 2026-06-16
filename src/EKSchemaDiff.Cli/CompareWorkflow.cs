@@ -70,6 +70,12 @@ public sealed class CompareWorkflow
         string? outOverride, bool interactive)
     {
         _log.Step($"開始比對流程 profile='{profile.Name}' interactive={interactive}");
+        // 選完 profile 後清空畫面再顯示比對情境，避免主選單／profile 挑選殘留干擾。
+        if (interactive && ConsoleUI.Interactive)
+        {
+            AnsiConsole.Clear();
+            _banner.Compact();
+        }
         ShowProfileSummary(profile);
 
         CompareSession? session = null;
@@ -111,7 +117,7 @@ public sealed class CompareWorkflow
         if (interactive)
         {
             _log.Step("進入勾選預覽畫面 ReviewScreen");
-            var included = ReviewScreen.Run(session.Differences, profile.ExportOptions.HtmlIgnoreWhitespace, _log);
+            var included = ReviewScreen.Run(session.Differences, profile.ExportOptions.HtmlIgnoreWhitespace, _log, _banner);
             _log.Step($"離開勾選預覽畫面，結果={(included is null ? "取消" : included.Count + " 項")}");
             if (included is null)
             {
