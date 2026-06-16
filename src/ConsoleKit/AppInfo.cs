@@ -31,6 +31,12 @@ public sealed record AppInfo
     /// <summary>作者署名。</summary>
     public string Author { get; init; } = string.Empty;
 
+    /// <summary>
+    /// 版號（純版本字串，不含前綴 v，如 0.1.0 或 0.1.0-alpha.0.3）。由領域端填入（通常取自組件版號）；
+    /// 供 Banner 在 Logo 角標與精簡列顯示。為空字串時不顯示版號。
+    /// </summary>
+    public string Version { get; init; } = string.Empty;
+
     /// <summary>專案層設定檔名（如 .myapp.json）。</summary>
     public string ProjectConfigFileName { get; init; } = string.Empty;
 

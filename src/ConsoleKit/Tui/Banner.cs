@@ -21,12 +21,19 @@ public sealed class Banner
         var lines = BlockFont.Render(_app.LogoText);
         int n = lines.Count;
 
+        var version = _app.Version;
+        bool hasVersion = !string.IsNullOrWhiteSpace(version);
+
         AnsiConsole.WriteLine();   // 頂部留白，讓 Logo 有呼吸空間
         for (int i = 0; i < n; i++)
         {
             var color = Theme.MetallicAt(n <= 1 ? 0 : (double)i / (n - 1));
             // 縮排兩格，與選單項目左緣對齊，避免 Logo 緊貼邊框。
-            AnsiConsole.MarkupLine($"  [{color}]{Markup.Escape(lines[i])}[/]");
+            var line = $"  [{color}]{Markup.Escape(lines[i])}[/]";
+            // 版號角標：貼在 Logo 末列（基線）尾端，暗色細字，像產品字標旁的小角標——點到為止、不搶 Logo。
+            if (hasVersion && i == n - 1)
+                line += $"  [{Theme.TextFaint}]v{Markup.Escape(version)}[/]";
+            AnsiConsole.MarkupLine(line);
         }
         AnsiConsole.WriteLine();   // Logo 與副標之間留白，避免擠在一起
         AnsiConsole.Write(Subtitle());
@@ -39,8 +46,11 @@ public sealed class Banner
         var name = Markup.Escape(_app.DisplayName);
         var primary = Markup.Escape(_app.PrimaryTagline);
         var author = Markup.Escape(_app.Author);
+        var versionTag = string.IsNullOrWhiteSpace(_app.Version)
+            ? string.Empty
+            : $"  [{Theme.TextFaint}]v{Markup.Escape(_app.Version)}[/]";
         AnsiConsole.Write(new Rule(
-            $"[{Theme.Accent}]{name}[/] [{Theme.Hairline}]·[/] [{Theme.TextMuted}]{primary} · by {author}[/]")
+            $"[{Theme.Accent}]{name}[/] [{Theme.Hairline}]·[/] [{Theme.TextMuted}]{primary} · by {author}[/]{versionTag}")
         {
             Justification = Justify.Left,
             Style = new Style(foreground: Theme.Hairline.ToSpectre()),
