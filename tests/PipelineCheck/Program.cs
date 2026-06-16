@@ -76,6 +76,26 @@ var (html, diffCount) = HtmlReportBuilder.BuildObjectReport(
 File.WriteAllText(Path.Combine(outDir, "table_diff.html"), html, new System.Text.UTF8Encoding(true));
 Console.WriteLine($"\n=== 資料表差異 HTML ===  差異列數：{diffCount}");
 
+// 2.6) 差異折疊規劃（DiffView.Flatten）：大段未變更 + 中間一處變更。
+//      折疊模式應壓出折疊摘要列且總列數遠少於完整模式；完整模式應保留所有行、無折疊列。
+var baseLines = Enumerable.Range(1, 40).Select(i => $"line {i}").ToList();
+var changed = baseLines.ToList();
+changed[19] = "line 20 CHANGED";   // 第 20 行內容變更
+string baseText = string.Join("\n", baseLines);
+string changedText = string.Join("\n", changed);
+
+var foldRows = EKSchemaDiff.Report.DiffEngine.Compare(changedText, baseText, false);
+var folded = EKSchemaDiff.Report.DiffView.Flatten(foldRows, full: false, contextLines: 3);
+var entire = EKSchemaDiff.Report.DiffView.Flatten(foldRows, full: true, contextLines: 3);
+
+bool foldHasSummary = folded.Any(d => d.IsFold && d.HiddenCount > 0);
+bool foldIsCompact = folded.Count < entire.Count;
+bool fullKeepsAll = entire.Count == foldRows.Count && entire.All(d => !d.IsFold);
+bool foldKeepsChange = folded.Any(d => d.Row?.Kind == EKSchemaDiff.Report.DiffKind.Modified);
+Console.WriteLine($"\n=== 差異折疊 DiffView.Flatten ===");
+Console.WriteLine($"  折疊列數={folded.Count}（含摘要={foldHasSummary}）；完整列數={entire.Count}；" +
+                  $"折疊更精簡={foldIsCompact}；完整保留全部={fullKeepsAll}；折疊保留變更={foldKeepsChange}");
+
 // 2.5) 完整部署腳本清理（CleanFullScript）：應去 SQLCMD 樣板、註解標頭、PRINT，
 //      改套單一 USE [部署庫] 開頭，保留所有 ALTER / sp_refreshsqlmodule / 描述批次與其順序。
 const string fullScript = """
@@ -165,6 +185,7 @@ Console.WriteLine($"\n所有輸出：{outDir}");
 bool ok = f.VerificationPassed && usesOverrideDb && keptAlter && keptDesc
           && strippedSqlCmd && strippedPrint && namedAlterTable && !hasPerm && diffCount >= 1
           && fullStartsWithUse && fullNoSqlCmd && fullNoPrint && fullKeptOps && fullNoComment
+          && foldHasSummary && foldIsCompact && fullKeepsAll && foldKeepsChange
           && cfgFoundProject && cfgMerged && cfgRoundTrip;
 Console.WriteLine($"\n整體：{(ok ? "PASS" : "FAIL")}");
 return ok ? 0 : 1;

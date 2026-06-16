@@ -68,6 +68,11 @@ public static class ReviewScreen
                     case ConsoleKey.N:
                         for (int i = 0; i < included.Length; i++) included[i] = false;
                         break;
+                    case ConsoleKey.RightArrow:
+                        // 展開游標物件的全螢幕差異詳檢（可捲動、可切換完整檔案）；返回後恢復隱藏游標。
+                        DiffScreen.Show(ordered[cursor], ignoreWhitespace, log);
+                        Console.CursorVisible = false;
+                        break;
                     case ConsoleKey.Enter:
                         var picked = Collect(ordered, included);
                         log.Step($"ReviewScreen 確認勾選 {picked.Count} 項");
@@ -106,7 +111,7 @@ public static class ReviewScreen
 
         // ── 清單區表頭：標題 + 操作提示 + 統計，最後留一空行與清單分開。
         ConsoleUI.Line($"[{Theme.Accent}]▌[/] [bold {Theme.Accent}]勾選要納入此次部署的物件[/]");
-        ConsoleUI.Line($"[{Theme.TextFaint}]↑↓ 移動 · 空白 勾選 · A 全選 · N 全不選 · Enter 確認 · Esc 返回[/]");
+        ConsoleUI.Line($"[{Theme.TextFaint}]↑↓ 移動 · 空白 勾選 · [/][bold {Theme.Accent}]→[/] [{Theme.TextFaint}]展開差異 · A 全選 · N 全不選 · Enter 確認 · Esc 返回[/]");
         ConsoleUI.Line($"已勾選 [bold {Theme.Success}]{chosen}[/] [{Theme.TextMuted}]/ {items.Count}[/]　[{Theme.TextFaint}]·[/]　" +
                        $"[{Theme.DiffAdd}]+{add}[/] [{Theme.TextMuted}]新增[/]　[{Theme.Warning}]~{chg}[/] [{Theme.TextMuted}]變更[/]　[{Theme.DiffDelete}]-{del}[/] [{Theme.TextMuted}]刪除[/]");
         ConsoleUI.Line();
@@ -150,8 +155,10 @@ public static class ReviewScreen
         var lines = BuildPreviewLines(cur.SourceScript, cur.TargetScript, ignoreWhitespace, w, previewRows, out int diffCount);
 
         ConsoleUI.Line();
-        var label = "預覽";
-        ConsoleUI.Line($"[{Theme.TextMuted}]{label}[/] [{Theme.Hairline}]{new string('─', Math.Max(2, w - ConsoleUI.DisplayWidth(label) - 1))}[/]");
+        var label = "差異預覽";
+        var hint = "→ 展開完整";
+        int ruleLen = Math.Max(2, w - ConsoleUI.DisplayWidth(label) - ConsoleUI.DisplayWidth(hint) - 3);
+        ConsoleUI.Line($"[{Theme.TextMuted}]{label}[/] [{Theme.Hairline}]{new string('─', ruleLen)}[/] [{Theme.TextFaint}]{hint}[/]");
         var nm = ConsoleUI.Esc(ConsoleUI.Truncate(cur.Name, Math.Max(10, w - 34)));
         ConsoleUI.Line($"[bold {Theme.TextPrimary}]{nm}[/]　[{kindColor}]●[/] [{Theme.TextMuted}]{action}[/] [{Theme.Hairline}]·[/] " +
                        $"[{Theme.TextMuted}]{diffCount} 處差異[/]　[{Theme.Hairline}]·[/] [{Theme.DiffAdd}]▏[/][{Theme.TextMuted}]新版[/] [{Theme.DiffDelete}]▏[/][{Theme.TextMuted}]原版[/]");
@@ -174,8 +181,8 @@ public static class ReviewScreen
 
     /// <summary>
     /// 產生 unified 風格的預覽 markup 列，折疊相同段落，限制寬高。
-    /// 版面：每行最左一道細色邊（▏新版綠／原版紅／context 灰）→ 行號 → 程式碼，
-    /// 以色邊取代 +/- 符號，視覺乾淨；行號 context/新版顯示更版行號、原版顯示原版行號。
+    /// 版面：每行最左一道細色邊（▏新版綠／原版紅／context 灰）→ 雙行號欄（新版號｜原版號）→ 程式碼，
+    /// 以色邊取代 +/- 符號；雙欄行號讓新／原各自獨立遞增，避免單欄交錯造成行號跳動的錯覺。
     /// </summary>
     private static List<string> BuildPreviewLines(
         string leftText, string rightText, bool ignoreWhitespace, int totalWidth, int maxRows, out int diffCount)
@@ -187,12 +194,14 @@ public static class ReviewScreen
         foreach (var r in rows) maxNum = Math.Max(maxNum, Math.Max(r.LeftNumber, r.RightNumber));
         int gw = Math.Max(2, maxNum.ToString().Length);
         string Gutter(int n) => n > 0 ? n.ToString().PadLeft(gw) : new string(' ', gw);
-        // 文字可用寬度 = 總寬 - 色邊(1) - 空格 - 行號欄(gw) - 空格
-        int textWidth = Math.Max(10, totalWidth - gw - 3);
+        string Blanks() => new string(' ', gw);
+        // 雙行號欄：新版號｜原版號，各欄獨立遞增，避免單欄交錯造成行號跳動的錯覺。
+        // 文字可用寬度 = 總寬 - 色邊(1) - 空格 - 新版欄(gw) - 空格 - 原版欄(gw) - 空格
+        int textWidth = Math.Max(10, totalWidth - 2 * gw - 4);
 
-        // 一列 = 「{色邊} {行號} {程式碼}」。bar/num/text 各自上色。
-        string Row(string bar, string num, string text, string textColor) =>
-            $"[{bar}]▏[/] [{NumColor}]{num}[/] [{textColor}]{ConsoleUI.Esc(ConsoleUI.Truncate(text, textWidth))}[/]";
+        // 一列 = 「{色邊} {新版號} {原版號} {程式碼}」；該側不存在時行號留空。新版號較亮、原版號較暗。
+        string Row(string bar, int newNum, int oldNum, IReadOnlyList<DiffSegment> segs, string baseColor, string changedColor) =>
+            $"[{bar}]▏[/] [{NumColor}]{Gutter(newNum)}[/] [{Theme.Hairline}]{Gutter(oldNum)}[/] {DiffMarkup.Segments(segs, baseColor, changedColor, textWidth)}";
 
         var outLines = new List<string>();
         int contextRun = 0;
@@ -202,31 +211,32 @@ public static class ReviewScreen
         {
             if (outLines.Count >= maxRows)
             {
-                outLines.Add($"[{BarCtx}]▏[/] [{Theme.DiffGutter}]{new string(' ', gw)}[/] [{Theme.TextMuted}]… 內容過長，完整差異請見 HTML 報告[/]");
+                outLines.Add($"[{BarCtx}]▏[/] [{Theme.DiffGutter}]{Blanks()}[/] [{Theme.Hairline}]{Blanks()}[/] [{Theme.TextMuted}]… 內容過長，完整差異請見 HTML 報告[/]");
                 break;
             }
             switch (r.Kind)
             {
                 case DiffKind.Same:
                     if (contextRun < maxContext)
-                        outLines.Add(Row(BarCtx, Gutter(r.LeftNumber), r.Right, CtxColor));
+                        outLines.Add(Row(BarCtx, r.LeftNumber, r.RightNumber, r.RightSegments, CtxColor, CtxColor));
                     else if (contextRun == maxContext)
-                        outLines.Add($"[{BarCtx}]▏[/] [{Theme.Hairline}]{new string(' ', gw)} ⋯[/]");
+                        outLines.Add($"[{BarCtx}]▏[/] [{Theme.Hairline}]{Blanks()} {Blanks()} ⋯[/]");
                     contextRun++;
                     break;
                 case DiffKind.Removed:
-                    outLines.Add(Row(DelColor, Gutter(r.RightNumber), r.Right, DelColor));
+                    outLines.Add(Row(DelColor, 0, r.RightNumber, r.RightSegments, DelColor, DelColor));
                     contextRun = 0;
                     break;
                 case DiffKind.Added:
-                    outLines.Add(Row(AddColor, Gutter(r.LeftNumber), r.Left, AddColor));
+                    outLines.Add(Row(AddColor, r.LeftNumber, 0, r.LeftSegments, AddColor, AddColor));
                     contextRun = 0;
                     break;
                 case DiffKind.Modified:
+                    // 變更行：未變更字詞用 context 色，只把改掉的字詞以紅／綠粗體高亮，凸顯真正差異處。
                     if (outLines.Count < maxRows)
-                        outLines.Add(Row(DelColor, Gutter(r.RightNumber), r.Right, DelColor));
+                        outLines.Add(Row(DelColor, 0, r.RightNumber, r.RightSegments, CtxColor, DelColor));
                     if (outLines.Count < maxRows)
-                        outLines.Add(Row(AddColor, Gutter(r.LeftNumber), r.Left, AddColor));
+                        outLines.Add(Row(AddColor, r.LeftNumber, 0, r.LeftSegments, CtxColor, AddColor));
                     contextRun = 0;
                     break;
             }
