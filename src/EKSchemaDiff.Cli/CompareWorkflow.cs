@@ -33,13 +33,13 @@ public sealed class CompareWorkflow
         try { store = _configStores.Discover(startDir); }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLineInterpolated($"[red]設定載入失敗：{ex.Message}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[{Theme.Danger}]設定載入失敗：{ex.Message}[/]");
             return ExitCode.UsageError;
         }
 
         if (store.Effective.Profiles.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]尚未設定任何 profile。[/]");
+            AnsiConsole.MarkupLine($"[{Theme.Warning}]尚未設定任何 profile。[/]");
             AnsiConsole.MarkupLine("請執行 [bold]eksd[/] 從主選單建立連線設定，或 [bold]eksd init[/] 產生範本。");
             return ExitCode.UsageError;
         }
@@ -58,7 +58,7 @@ public sealed class CompareWorkflow
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLineInterpolated($"[red]{ex.Message}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[{Theme.Danger}]{ex.Message}[/]");
             return ExitCode.UsageError;
         }
 
@@ -90,24 +90,24 @@ public sealed class CompareWorkflow
         catch (Exception ex)
         {
             _log.Error("比對階段失敗", ex);
-            AnsiConsole.MarkupLineInterpolated($"[red]比對失敗：{ex.Message}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[{Theme.Danger}]比對失敗：{ex.Message}[/]");
             return EksdExitCode.CompareFailed;
         }
 
         if (session is null || !session.IsValid)
         {
-            AnsiConsole.MarkupLine("[red]比對結果無效。[/]");
+            AnsiConsole.MarkupLine($"[{Theme.Danger}]比對結果無效。[/]");
             foreach (var e in session?.GetErrors() ?? Enumerable.Empty<string>())
-                AnsiConsole.MarkupLineInterpolated($"  [red]- {e}[/]");
+                AnsiConsole.MarkupLineInterpolated($"  [{Theme.Danger}]- {e}[/]");
             return EksdExitCode.CompareFailed;
         }
 
         foreach (var u in session.UnrecognizedExcludedTypes)
-            AnsiConsole.MarkupLineInterpolated($"[yellow]警告：排除類型無法辨識，已忽略：{u}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[{Theme.Warning}]警告：排除類型無法辨識，已忽略：{u}[/]");
 
         if (session.Differences.Count == 0)
         {
-            AnsiConsole.MarkupLine("[green]兩個資料庫結構一致，沒有差異。[/]");
+            AnsiConsole.MarkupLine($"[{Theme.Success}]兩個資料庫結構一致，沒有差異。[/]");
             return ExitCode.Ok;
         }
 
@@ -121,13 +121,13 @@ public sealed class CompareWorkflow
             _log.Step($"離開勾選預覽畫面，結果={(included is null ? "取消" : included.Count + " 項")}");
             if (included is null)
             {
-                AnsiConsole.MarkupLine("[yellow]已取消，未匯出。[/]");
+                AnsiConsole.MarkupLine($"[{Theme.Warning}]已取消，未匯出。[/]");
                 return ExitCode.Ok;
             }
             session.ApplyInclusion(included);
             if (included.Count == 0)
             {
-                AnsiConsole.MarkupLine("[yellow]未勾選任何物件，已取消匯出。[/]");
+                AnsiConsole.MarkupLine($"[{Theme.Warning}]未勾選任何物件，已取消匯出。[/]");
                 return ExitCode.Ok;
             }
             // 輸出項目一律沿用設定頁（exportOptions）的設定（不再每次詢問，否則設定形同虛設）。
@@ -144,7 +144,7 @@ public sealed class CompareWorkflow
                 var (captured, cancelled) = RunExportWithProgress(session!, outputDir);
                 if (cancelled || captured is null)
                 {
-                    AnsiConsole.MarkupLine("[yellow]已中斷匯出（部分檔案可能已寫出）。[/]");
+                    AnsiConsole.MarkupLine($"[{Theme.Warning}]已中斷匯出（部分檔案可能已寫出）。[/]");
                     return ExitCode.Ok;
                 }
                 summary = captured;
@@ -157,7 +157,7 @@ public sealed class CompareWorkflow
         catch (Exception ex)
         {
             _log.Error("匯出階段失敗", ex);
-            AnsiConsole.MarkupLineInterpolated($"[red]匯出失敗：{ex.Message}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[{Theme.Danger}]匯出失敗：{ex.Message}[/]");
             return EksdExitCode.ExportFailed;
         }
 
@@ -246,7 +246,7 @@ public sealed class CompareWorkflow
     {
         AnsiConsole.Clear();
         _banner.Compact();
-        AnsiConsole.MarkupLine("[green]✔ 產出完成[/]");
+        AnsiConsole.MarkupLine($"[{Theme.Success}]✔ 產出完成[/]");
         AnsiConsole.WriteLine();
 
         string? curGroup = null;
@@ -255,14 +255,14 @@ public sealed class CompareWorkflow
             if (it.Group != curGroup)
             {
                 curGroup = it.Group;
-                AnsiConsole.MarkupLine($"[orange3]▌[/] [bold orange3]{Markup.Escape(it.Group)}[/]");
+                AnsiConsole.MarkupLine($"[{Theme.Accent}]▌[/] [bold {Theme.Accent}]{Markup.Escape(it.Group)}[/]");
             }
             var label = Markup.Escape(it.Label);
             var line = it.State switch
             {
-                ExportItemState.Skipped => $"  [yellow]⤼[/] [strikethrough grey54]{label}[/] [yellow](略過)[/]",
-                _ when it.Warned => $"  [yellow]✓[/] [strikethrough yellow]{label}[/] [yellow](警告)[/]",
-                _ => $"  [green]✓[/] [strikethrough grey54]{label}[/]",
+                ExportItemState.Skipped => $"  [{Theme.Warning}]⤼[/] [strikethrough {Theme.TextMuted}]{label}[/] [{Theme.Warning}](略過)[/]",
+                _ when it.Warned => $"  [{Theme.Warning}]✓[/] [strikethrough {Theme.Warning}]{label}[/] [{Theme.Warning}](警告)[/]",
+                _ => $"  [{Theme.Success}]✓[/] [strikethrough {Theme.TextMuted}]{label}[/]",
             };
             AnsiConsole.MarkupLine(line);
         }
@@ -279,8 +279,8 @@ public sealed class CompareWorkflow
         // 進度畫面資料密集：用精簡單行 banner，讓整幀高度可控、不超出視窗（超出會觸發捲動造成 logo 抖動）。
         _banner.Compact();
 
-        string spin = done ? "[green]✔[/]" : $"[orange3]{SpinnerFrames[tick % SpinnerFrames.Length]}[/]";
-        ConsoleUI.Line($"{spin} [orange3]產出進度[/]　[grey39]Esc 中斷[/]");
+        string spin = done ? $"[{Theme.Success}]✔[/]" : $"[{Theme.Accent}]{SpinnerFrames[tick % SpinnerFrames.Length]}[/]";
+        ConsoleUI.Line($"{spin} [{Theme.Accent}]產出進度[/]　[{Theme.TextFaint}]Esc 中斷[/]");
         ConsoleUI.Line();
 
         int total = Math.Max(1, items.Count);
@@ -299,9 +299,9 @@ public sealed class CompareWorkflow
             if (pos >= span) pos = span * 2 - 1 - pos;   // 來回反彈
             empty[Math.Clamp(pos, 0, span - 1)] = '▒';
         }
-        var bar = $"[green]{new string('█', filled)}[/][grey39]{empty}[/]";
+        var bar = $"[{Theme.Success}]{new string('█', filled)}[/][{Theme.Hairline}]{empty}[/]";
         int pct = (int)Math.Round((double)current / total * 100);
-        ConsoleUI.Line($"{bar}  [bold]{current}/{total}[/] [grey]({pct}%)[/]");
+        ConsoleUI.Line($"{bar}  [bold]{current}/{total}[/] [{Theme.TextMuted}]({pct}%)[/]");
         ConsoleUI.Line();
 
         // 整幀必須塞進視窗高度，否則最後一行的換行會把畫面往上捲、造成 banner 抖動。
@@ -312,7 +312,7 @@ public sealed class CompareWorkflow
         RenderItemChecklist(items, tick, done, maxRows);
 
         if (cancelling)
-            ConsoleUI.Line("[yellow]正在中斷…[/]");
+            ConsoleUI.Line($"[{Theme.Warning}]正在中斷…[/]");
         ConsoleUI.EndFrame();
     }
 
@@ -345,18 +345,18 @@ public sealed class CompareWorkflow
             if (it.Group != curGroup)
             {
                 curGroup = it.Group;
-                lines.Add($"[orange3]▌[/] [bold orange3]{Markup.Escape(it.Group)}[/] " +
-                          $"[grey39]({groupDone.GetValueOrDefault(it.Group)}/{groupTotal[it.Group]})[/]");
+                lines.Add($"[{Theme.Accent}]▌[/] [bold {Theme.Accent}]{Markup.Escape(it.Group)}[/] " +
+                          $"[{Theme.TextFaint}]({groupDone.GetValueOrDefault(it.Group)}/{groupTotal[it.Group]})[/]");
             }
 
             var label = Markup.Escape(it.Label);
             string line = it.State switch
             {
-                ExportItemState.Done when it.Warned => $"  [yellow]✓[/] [strikethrough yellow]{label}[/] [yellow](警告)[/]",
-                ExportItemState.Done => $"  [green]✓[/] [strikethrough grey54]{label}[/]",
-                ExportItemState.Skipped => $"  [yellow]⤼[/] [strikethrough grey54]{label}[/] [yellow](略過)[/]",
-                ExportItemState.Running => $"  [orange3]{spin}[/] [bold]{label}[/]",
-                _ => $"  [grey39]○ {label}[/]",
+                ExportItemState.Done when it.Warned => $"  [{Theme.Warning}]✓[/] [strikethrough {Theme.Warning}]{label}[/] [{Theme.Warning}](警告)[/]",
+                ExportItemState.Done => $"  [{Theme.Success}]✓[/] [strikethrough {Theme.TextMuted}]{label}[/]",
+                ExportItemState.Skipped => $"  [{Theme.Warning}]⤼[/] [strikethrough {Theme.TextMuted}]{label}[/] [{Theme.Warning}](略過)[/]",
+                ExportItemState.Running => $"  [{Theme.Accent}]{spin}[/] [bold]{label}[/]",
+                _ => $"  [{Theme.TextFaint}]○ {label}[/]",
             };
             if (it.State == ExportItemState.Running && focus < 0) focus = lines.Count;
             lines.Add(line);
@@ -387,34 +387,34 @@ public sealed class CompareWorkflow
         hasBottom = start + windowRows < lines.Count;
         int end = start + windowRows;
 
-        if (hasTop) ConsoleUI.Line($"  [grey39]…（前 {start} 列略）[/]");
+        if (hasTop) ConsoleUI.Line($"  [{Theme.TextFaint}]…（前 {start} 列略）[/]");
         for (int i = start; i < end; i++) ConsoleUI.Line(lines[i]);
-        if (hasBottom) ConsoleUI.Line($"  [grey39]…（後 {lines.Count - end} 列略）[/]");
+        if (hasBottom) ConsoleUI.Line($"  [{Theme.TextFaint}]…（後 {lines.Count - end} 列略）[/]");
     }
 
     private static void ShowProfileSummary(Profile profile)
     {
         var co = profile.CompareOptions;
         var grid = new Grid().AddColumn().AddColumn();
-        grid.AddRow("[grey]Profile[/]", $"[bold]{Markup.Escape(profile.Name)}[/]");
-        grid.AddRow("[grey]來源（更版）[/]", Markup.Escape(profile.Source.ToSafeDisplay()));
-        grid.AddRow("[grey]目標（原版）[/]", Markup.Escape(profile.Target.ToSafeDisplay()));
+        grid.AddRow($"[{Theme.TextMuted}]Profile[/]", $"[bold]{Markup.Escape(profile.Name)}[/]");
+        grid.AddRow($"[{Theme.TextMuted}]來源（更版）[/]", Markup.Escape(profile.Source.ToSafeDisplay()));
+        grid.AddRow($"[{Theme.TextMuted}]目標（原版）[/]", Markup.Escape(profile.Target.ToSafeDisplay()));
         var deployDb = profile.ResolveDeployDatabaseName();
         var deployDbNote = string.IsNullOrWhiteSpace(profile.ExportOptions.DeployDatabaseName)
-            ? "[grey](沿用目標庫名)[/]" : "[yellow](已覆寫)[/]";
-        grid.AddRow("[grey]部署 USE 資料庫[/]", $"[bold]{Markup.Escape(deployDb)}[/] {deployDbNote}");
-        grid.AddRow("[grey]忽略權限[/]", co.IgnorePermissions
-            ? "[green]是（不動 GRANT/DENY/REVOKE）[/]"
-            : "[red]否（注意誤刪權限風險）[/]");
-        grid.AddRow("[grey]刪除目標多出物件[/]", co.DropObjectsNotInSource ? "[red]是[/]" : "[green]否[/]");
-        grid.AddRow("[grey]資料遺失阻擋[/]", co.BlockOnPossibleDataLoss ? "[green]是[/]" : "[yellow]否[/]");
-        grid.AddRow("[grey]比對描述(MS_Description)[/]", co.IgnoreExtendedProperties ? "[yellow]否[/]" : "[green]是[/]");
-        grid.AddRow("[grey]輸出項目[/]", $"[yellow]{Markup.Escape(profile.ExportOptions.Describe())}[/]");
+            ? $"[{Theme.TextMuted}](沿用目標庫名)[/]" : $"[{Theme.Warning}](已覆寫)[/]";
+        grid.AddRow($"[{Theme.TextMuted}]部署 USE 資料庫[/]", $"[bold]{Markup.Escape(deployDb)}[/] {deployDbNote}");
+        grid.AddRow($"[{Theme.TextMuted}]忽略權限[/]", co.IgnorePermissions
+            ? $"[{Theme.Success}]是（不動 GRANT/DENY/REVOKE）[/]"
+            : $"[{Theme.Danger}]否（注意誤刪權限風險）[/]");
+        grid.AddRow($"[{Theme.TextMuted}]刪除目標多出物件[/]", co.DropObjectsNotInSource ? $"[{Theme.Danger}]是[/]" : $"[{Theme.Success}]否[/]");
+        grid.AddRow($"[{Theme.TextMuted}]資料遺失阻擋[/]", co.BlockOnPossibleDataLoss ? $"[{Theme.Success}]是[/]" : $"[{Theme.Warning}]否[/]");
+        grid.AddRow($"[{Theme.TextMuted}]比對描述(MS_Description)[/]", co.IgnoreExtendedProperties ? $"[{Theme.Warning}]否[/]" : $"[{Theme.Success}]是[/]");
+        grid.AddRow($"[{Theme.TextMuted}]輸出項目[/]", $"[{Theme.Warning}]{Markup.Escape(profile.ExportOptions.Describe())}[/]");
         AnsiConsole.Write(new Panel(grid)
         {
             Header = new PanelHeader(" 比對情境 "),
             Border = BoxBorder.Rounded,
-        }.BorderColor(Color.DarkOrange3));
+        }.BorderColor(Theme.Accent.ToSpectre()));
         AnsiConsole.WriteLine();
     }
 
@@ -424,16 +424,20 @@ public sealed class CompareWorkflow
         int chg = session.Differences.Count(d => d.Kind == ChangeKind.Change);
         int del = session.Differences.Count(d => d.Kind == ChangeKind.Delete);
         AnsiConsole.MarkupLineInterpolated(
-            $"找到 [bold]{session.Differences.Count}[/] 項差異：[green]+{add} 新增[/]　[yellow]~{chg} 變更[/]　[red]-{del} 刪除[/]");
+            $"找到 [bold]{session.Differences.Count}[/] 項差異：[{Theme.DiffAdd}]+{add} 新增[/]　[{Theme.Warning}]~{chg} 變更[/]　[{Theme.DiffDelete}]-{del} 刪除[/]");
         AnsiConsole.WriteLine();
     }
 
     private static void ShowExportSummary(ExportSummary summary)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[green]匯出完成[/]") { Justification = Justify.Left });
+        AnsiConsole.Write(new Rule($"[{Theme.Success}]匯出完成[/]")
+        {
+            Justification = Justify.Left,
+            Style = new Style(foreground: Theme.Hairline.ToSpectre()),
+        });
 
-        var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey39);
+        var table = new Table().Border(TableBorder.Rounded).BorderColor(Theme.TextFaint.ToSpectre());
         table.AddColumn("項目");
         table.AddColumn("結果");
         if (summary.FullScriptPath is not null)
@@ -443,8 +447,8 @@ public sealed class CompareWorkflow
         if (summary.ObjectScriptCount > 0)
         {
             var v = summary.ObjectScriptVerificationPassed
-                ? "[green]整理驗證通過[/]"
-                : $"[red]驗證未過：{Markup.Escape(summary.ObjectScriptVerificationMessage ?? "")}[/]";
+                ? $"[{Theme.Success}]整理驗證通過[/]"
+                : $"[{Theme.Danger}]驗證未過：{Markup.Escape(summary.ObjectScriptVerificationMessage ?? "")}[/]";
             table.AddRow("逐物件部署檔", $"{summary.ObjectScriptCount} 個　{v}");
         }
         if (summary.HtmlReportCount > 0)
@@ -453,7 +457,7 @@ public sealed class CompareWorkflow
         AnsiConsole.Write(table);
 
         foreach (var w in summary.Warnings)
-            AnsiConsole.MarkupLineInterpolated($"[yellow]! {w}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[{Theme.Warning}]! {w}[/]");
     }
 
     private static string ResolveOutputDir(ConfigStore store, Profile profile, string? overrideDir)
@@ -469,6 +473,6 @@ public sealed class CompareWorkflow
     private static void OpenFile(string path)
     {
         try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
-        catch (Exception ex) { AnsiConsole.MarkupLineInterpolated($"[yellow]無法自動開啟：{ex.Message}[/]"); }
+        catch (Exception ex) { AnsiConsole.MarkupLineInterpolated($"[{Theme.Warning}]無法自動開啟：{ex.Message}[/]"); }
     }
 }

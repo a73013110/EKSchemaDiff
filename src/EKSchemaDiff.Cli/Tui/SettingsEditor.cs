@@ -102,7 +102,7 @@ public static class SettingsEditor
     /// <summary>編輯 profile 選項。就地切換，呼叫端負責存檔。</summary>
     public static void Edit(Profile profile, Banner banner)
     {
-        var title = $"[orange3]設定頁[/] · profile [bold]{Markup.Escape(profile.Name)}[/]";
+        var title = $"[{Theme.Accent}]設定頁[/] · profile [bold]{Markup.Escape(profile.Name)}[/]";
 
         Menu.Show(
             title,
@@ -116,12 +116,12 @@ public static class SettingsEditor
                         case SlotKind.Header:
                             list.Add(new MenuItem
                             {
-                                Label = $"[orange3]▌[/] [bold orange3]{Markup.Escape(slot.HeaderTitle!)}[/]",
+                                Label = $"[{Theme.Accent}]▌[/] [bold {Theme.Accent}]{Markup.Escape(slot.HeaderTitle!)}[/]",
                                 IsSeparator = true,
                             });
                             break;
                         case SlotKind.Finish:
-                            list.Add(new MenuItem { Label = "[green]✔ 完成並返回[/]", Description = "結束設定頁。" });
+                            list.Add(new MenuItem { Label = $"[{Theme.Success}]✔ 完成並返回[/]", Description = "結束設定頁。" });
                             break;
                         default:
                             var r = slot.Row!;
@@ -136,7 +136,7 @@ public static class SettingsEditor
                 return list;
             },
             header: banner.Show,
-            footer: "[grey39]↑↓ 移動 · Enter 切換/編輯 · Esc 返回[/]",
+            footer: $"[{Theme.TextFaint}]↑↓ 移動 · Enter 切換/編輯 · Esc 返回[/]",
             onActivate: idx =>
             {
                 var slot = Layout[idx];
@@ -147,10 +147,10 @@ public static class SettingsEditor
     }
 
     /// <summary>開關值：顏色＋實心/空心圓雙重區隔，遠看也能一眼分辨開或關。</summary>
-    private static string Toggle(bool v) => v ? "[green]● 開[/]" : "[grey54]○ 關[/]";
+    private static string Toggle(bool v) => v ? $"[{Theme.Success}]● 開[/]" : $"[{Theme.TextMuted}]○ 關[/]";
 
-    /// <summary>非開關的值（模式、名稱、清單）以黃色呈現，內容先逸出避免 markup 注入。</summary>
-    private static string Plain(string text) => $"[yellow]{Markup.Escape(text)}[/]";
+    /// <summary>非開關的值（模式、名稱、清單）以強調色呈現，內容先逸出避免 markup 注入。</summary>
+    private static string Plain(string text) => $"[{Theme.Warning}]{Markup.Escape(text)}[/]";
 
     private static string Join(List<string> items) => items.Count == 0 ? "(無)" : string.Join(",", items);
 

@@ -33,7 +33,7 @@ public sealed class HomeCommand : Command<CompareSettings>
         if (!ConsoleUI.Interactive)
         {
             _banner.Show();
-            AnsiConsole.MarkupLine("[yellow]目前不是互動終端機，無法顯示主選單。[/]");
+            AnsiConsole.MarkupLine($"[{Theme.Warning}]目前不是互動終端機，無法顯示主選單。[/]");
             AnsiConsole.MarkupLine("請在終端機直接執行 [bold]eksd[/]，或用 [bold]eksd compare --profile <名稱>[/] 直接比對。");
             return ExitCode.UsageError;
         }
@@ -44,14 +44,14 @@ public sealed class HomeCommand : Command<CompareSettings>
             try { store = _configStores.Discover(settings.StartDir); }
             catch (Exception ex)
             {
-                AnsiConsole.MarkupLineInterpolated($"[red]設定載入失敗：{ex.Message}[/]");
+                AnsiConsole.MarkupLineInterpolated($"[{Theme.Danger}]設定載入失敗：{ex.Message}[/]");
                 return ExitCode.UsageError;
             }
 
             int profileCount = store.Effective.Profiles.Count;
 
             var pick = Menu.Show(
-                "[orange3]主選單[/]　[grey]選擇要進行的作業[/]",
+                $"[{Theme.Accent}]主選單[/]　[{Theme.TextMuted}]選擇要進行的作業[/]",
                 () => new List<MenuItem>
                 {
                     new() { Label = "開始比對", Description = profileCount > 0
@@ -63,7 +63,7 @@ public sealed class HomeCommand : Command<CompareSettings>
                     new() { Label = "離開", Description = "結束程式。" },
                 },
                 header: _banner.Show,
-                footer: $"[grey39]設定檔：{Markup.Escape(store.ProjectConfigPath ?? "(尚未建立)")}　·　profile：{profileCount}[/]");
+                footer: $"[{Theme.TextFaint}]設定檔：{Markup.Escape(store.ProjectConfigPath ?? "(尚未建立)")}　·　profile：{profileCount}[/]");
 
             if (pick is >= 0 and <= 3) AnsiConsole.Clear();   // 進入動作前清一次（非每次按鍵，不會閃）
             switch (pick)
@@ -83,7 +83,7 @@ public sealed class HomeCommand : Command<CompareSettings>
                 case 4: // 離開
                 case -1:
                     AnsiConsole.Clear();
-                    AnsiConsole.MarkupLine("[grey]再見。[/]");
+                    AnsiConsole.MarkupLine($"[{Theme.TextMuted}]再見。[/]");
                     _log.Info("使用者由主選單離開");
                     return ExitCode.Ok;
             }
@@ -107,9 +107,9 @@ public sealed class HomeCommand : Command<CompareSettings>
             _log.Error($"動作「{action}」發生未處理例外", ex);
             try { Console.CursorVisible = true; } catch { }
             AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLineInterpolated($"[red]「{action}」發生錯誤：{ex.Message}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[{Theme.Danger}]「{action}」發生錯誤：{ex.Message}[/]");
             if (_log.FilePath is not null)
-                AnsiConsole.MarkupLineInterpolated($"[grey]完整堆疊已寫入記錄檔：{_log.FilePath}[/]");
+                AnsiConsole.MarkupLineInterpolated($"[{Theme.TextMuted}]完整堆疊已寫入記錄檔：{_log.FilePath}[/]");
             Pause();
         }
     }
@@ -118,7 +118,7 @@ public sealed class HomeCommand : Command<CompareSettings>
     {
         if (store.Effective.Profiles.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]尚未設定任何 profile，請先用「新增/編輯連線設定」。[/]");
+            AnsiConsole.MarkupLine($"[{Theme.Warning}]尚未設定任何 profile，請先用「新增/編輯連線設定」。[/]");
             Pause();
             return;
         }
@@ -137,7 +137,7 @@ public sealed class HomeCommand : Command<CompareSettings>
         var config = useGlobal ? store.GlobalConfig : store.ProjectConfig;
         if (config is null || config.Profiles.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]尚無 profile 可設定，請先用「新增/編輯連線設定」。[/]");
+            AnsiConsole.MarkupLine($"[{Theme.Warning}]尚無 profile 可設定，請先用「新增/編輯連線設定」。[/]");
             Pause();
             return;
         }
@@ -147,16 +147,16 @@ public sealed class HomeCommand : Command<CompareSettings>
 
         SettingsEditor.Edit(profile, _banner);
         var path = useGlobal ? store.SaveGlobal(config) : store.SaveProject(config);
-        AnsiConsole.MarkupLineInterpolated($"[green]設定已儲存：{path}[/]");
+        AnsiConsole.MarkupLineInterpolated($"[{Theme.Success}]設定已儲存：{path}[/]");
         Pause();
     }
 
     private void ListProfiles(ConfigStore store)
     {
         _banner.Show();
-        AnsiConsole.MarkupLineInterpolated($"[grey]專案設定：{store.ProjectConfigPath ?? "(無)"}[/]");
-        AnsiConsole.MarkupLineInterpolated($"[grey]全域設定：{store.GlobalConfigPath}[/]");
-        if (store.Effective.Profiles.Count == 0) { AnsiConsole.MarkupLine("[yellow](尚無 profile)[/]"); return; }
+        AnsiConsole.MarkupLineInterpolated($"[{Theme.TextMuted}]專案設定：{store.ProjectConfigPath ?? "(無)"}[/]");
+        AnsiConsole.MarkupLineInterpolated($"[{Theme.TextMuted}]全域設定：{store.GlobalConfigPath}[/]");
+        if (store.Effective.Profiles.Count == 0) { AnsiConsole.MarkupLine($"[{Theme.Warning}](尚無 profile)[/]"); return; }
 
         AnsiConsole.Write(ProfileTable.Build(store.Effective.Profiles, store.Effective.DefaultProfile));
     }
@@ -164,7 +164,7 @@ public sealed class HomeCommand : Command<CompareSettings>
     private static void Pause()
     {
         Console.CursorVisible = true;
-        AnsiConsole.Markup("[grey]按 Enter 返回主選單…[/]");
+        AnsiConsole.Markup($"[{Theme.TextMuted}]按 Enter 返回主選單…[/]");
         Console.ReadLine();
     }
 }

@@ -8,7 +8,7 @@ public static class Prompts
 {
     /// <summary>SQL 驗證缺密碼時的互動輸入。</summary>
     public static string PromptPassword(string label) =>
-        TextInput.PromptSecret($"請輸入 [yellow]{Markup.Escape(label)}[/]：");
+        TextInput.PromptSecret($"請輸入 [{Theme.Accent}]{Markup.Escape(label)}[/]：");
 
     /// <summary>
     /// 從多組 profile 中互動挑選：以「卡片框」方式呈現每組情境（名稱＋來源／目標），
@@ -24,6 +24,8 @@ public static class Prompts
             return FallbackPick(profiles);
 
         int cursor = 0;
+        // 進入時清一次，抹掉主選單殘留；之後逐格重繪維持無閃爍。
+        AnsiConsole.Clear();
         try
         {
             Console.CursorVisible = false;
@@ -61,7 +63,7 @@ public static class Prompts
     {
         ConsoleUI.BeginFrame();
         banner.Compact();
-        ConsoleUI.Line("[orange3]選擇要使用的 profile[/]　[grey39]↑↓ 移動 · Enter 選擇 · Esc 返回[/]");
+        ConsoleUI.Line($"[{Theme.Accent}]選擇要使用的 profile[/]　[{Theme.TextFaint}]↑↓ 移動 · Enter 選擇 · Esc 返回[/]");
         ConsoleUI.Line();
 
         int boxW = Math.Min(ConsoleUI.Width - 4, 72);
@@ -74,30 +76,30 @@ public static class Prompts
         int top = ConsoleUI.ScrollTop(cursor, profiles.Count, maxCards);
 
         if (top > 0)
-            ConsoleUI.Line($"  [grey39]▲ 上方還有 {top} 組[/]");
+            ConsoleUI.Line($"  [{Theme.TextFaint}]▲ 上方還有 {top} 組[/]");
 
         for (int i = top; i < Math.Min(profiles.Count, top + maxCards); i++)
             RenderCard(profiles[i], i == cursor, boxW, innerW);
 
         int below = profiles.Count - (top + maxCards);
         if (below > 0)
-            ConsoleUI.Line($"  [grey39]▼ 下方還有 {below} 組[/]");
+            ConsoleUI.Line($"  [{Theme.TextFaint}]▼ 下方還有 {below} 組[/]");
 
         // 底部顯示游標所在 profile 的說明（若有）。
         ConsoleUI.Line();
         var desc = profiles[cursor].Description;
         ConsoleUI.Line(string.IsNullOrWhiteSpace(desc)
-            ? "[grey39](此 profile 未填說明)[/]"
-            : $"[grey]{ConsoleUI.Esc(ConsoleUI.Truncate(desc!, ConsoleUI.Width - 2))}[/]");
+            ? $"[{Theme.TextFaint}](此 profile 未填說明)[/]"
+            : $"[{Theme.TextMuted}]{ConsoleUI.Esc(ConsoleUI.Truncate(desc!, ConsoleUI.Width - 2))}[/]");
         ConsoleUI.EndFrame();
     }
 
     private static void RenderCard(Profile p, bool selected, int boxW, int innerW)
     {
-        string bc = selected ? "orange3" : "grey39";          // 框線顏色
+        string bc = (selected ? Theme.Accent : Theme.TextFaint).ToString();   // 框線顏色
         string gut = "  ";                                     // 一般列左側留白
-        string arrow = selected ? "[orange3]›[/] " : "  ";     // 游標箭頭只放在名稱列
-        string dot = selected ? "[green]●[/]" : "[grey39]○[/]";
+        string arrow = selected ? $"[{Theme.Accent}]›[/] " : "  ";   // 游標箭頭只放在名稱列
+        string dot = selected ? $"[{Theme.Success}]●[/]" : $"[{Theme.TextFaint}]○[/]";
 
         string bar = new string('─', boxW - 2);
         ConsoleUI.Line($"{gut}[{bc}]╭{bar}╮[/]");
@@ -107,8 +109,8 @@ public static class Prompts
         string nameMk = selected ? $"[bold]{ConsoleUI.Esc(name)}[/]" : ConsoleUI.Esc(name);
         BoxRow(arrow, bc, innerW, $"{dot} {nameMk}", 2 + ConsoleUI.DisplayWidth(name));
 
-        BoxRow(gut, bc, innerW, ValueRow("來源", p.Source.ToSafeDisplay(), innerW, "green"), innerW);
-        BoxRow(gut, bc, innerW, ValueRow("目標", p.Target.ToSafeDisplay(), innerW, "yellow"), innerW, padded: true);
+        BoxRow(gut, bc, innerW, ValueRow("來源", p.Source.ToSafeDisplay(), innerW, Theme.Success.ToString()), innerW);
+        BoxRow(gut, bc, innerW, ValueRow("目標", p.Target.ToSafeDisplay(), innerW, Theme.Warning.ToString()), innerW, padded: true);
 
         ConsoleUI.Line($"{gut}[{bc}]╰{bar}╯[/]");
     }
@@ -121,7 +123,7 @@ public static class Prompts
         string val = FitDisplay(value, valCols);
         int used = labelW + 2 + ConsoleUI.DisplayWidth(val);
         int pad = Math.Max(0, innerW - used);
-        return $"[grey]{ConsoleUI.Esc(label)}[/]  [{valueColor}]{ConsoleUI.Esc(val)}[/]{new string(' ', pad)}";
+        return $"[{Theme.TextMuted}]{ConsoleUI.Esc(label)}[/]  [{valueColor}]{ConsoleUI.Esc(val)}[/]{new string(' ', pad)}";
     }
 
     /// <summary>畫一列框內內容：左右框線中間放入 contentMarkup，並補白到 innerW 顯示寬度。</summary>
@@ -155,7 +157,7 @@ public static class Prompts
     private static Profile? FallbackPick(IReadOnlyList<Profile> profiles)
     {
         var prompt = new SelectionPrompt<Profile>()
-            .Title("選擇要使用的 [yellow]profile[/]")
+            .Title($"選擇要使用的 [{Theme.Accent}]profile[/]")
             .UseConverter(p => $"{p.Name}  ({p.Source.ToSafeDisplay()} → {p.Target.ToSafeDisplay()})");
         foreach (var p in profiles) prompt.AddChoice(p);
         return AnsiConsole.Prompt(prompt);

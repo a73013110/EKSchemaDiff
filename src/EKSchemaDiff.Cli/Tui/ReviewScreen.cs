@@ -29,6 +29,8 @@ public static class ReviewScreen
             return FallbackMultiSelect(ordered);
 
         int cursor = 0;
+        // 進入時清一次，抹掉前一畫面（比對情境/總覽）的殘留；之後逐格重繪維持無閃爍。
+        AnsiConsole.Clear();
         try
         {
             Console.CursorVisible = false;
@@ -43,7 +45,7 @@ public static class ReviewScreen
                     // 預覽/差異繪製若失敗，記錄並跳過該格重繪，避免整個畫面崩潰把程式帶掉。
                     log.Error($"ReviewScreen 重繪失敗（cursor={cursor}）", ex);
                     ConsoleUI.BeginFrame();
-                    ConsoleUI.Line("[red]預覽繪製發生錯誤，已略過此格。詳見記錄檔。[/]");
+                    ConsoleUI.Line($"[{Theme.Danger}]預覽繪製發生錯誤，已略過此格。詳見記錄檔。[/]");
                     ConsoleUI.EndFrame();
                 }
                 var key = Console.ReadKey(intercept: true);
@@ -103,10 +105,10 @@ public static class ReviewScreen
         int del = items.Count(d => d.Kind == ChangeKind.Delete);
 
         // ── 清單區表頭：標題 + 操作提示 + 統計，最後留一空行與清單分開。
-        ConsoleUI.Line("[orange3]▌[/] [bold orange3]勾選要納入此次部署的物件[/]");
-        ConsoleUI.Line("[grey39]↑↓ 移動 · 空白 勾選 · A 全選 · N 全不選 · Enter 確認 · Esc 返回[/]");
-        ConsoleUI.Line($"已勾選 [bold green]{chosen}[/] [grey46]/ {items.Count}[/]　[grey39]·[/]　" +
-                       $"[#7ee787]+{add}[/] [grey46]新增[/]　[#e3b341]~{chg}[/] [grey46]變更[/]　[#ff7b72]-{del}[/] [grey46]刪除[/]");
+        ConsoleUI.Line($"[{Theme.Accent}]▌[/] [bold {Theme.Accent}]勾選要納入此次部署的物件[/]");
+        ConsoleUI.Line($"[{Theme.TextFaint}]↑↓ 移動 · 空白 勾選 · A 全選 · N 全不選 · Enter 確認 · Esc 返回[/]");
+        ConsoleUI.Line($"已勾選 [bold {Theme.Success}]{chosen}[/] [{Theme.TextMuted}]/ {items.Count}[/]　[{Theme.TextFaint}]·[/]　" +
+                       $"[{Theme.DiffAdd}]+{add}[/] [{Theme.TextMuted}]新增[/]　[{Theme.Warning}]~{chg}[/] [{Theme.TextMuted}]變更[/]　[{Theme.DiffDelete}]-{del}[/] [{Theme.TextMuted}]刪除[/]");
         ConsoleUI.Line();
 
         // 版面：banner(2)+表頭(3)+空行(1)=6 列固定；清單與預覽之間 空行+標題+資訊=3 列；底部留 1 列安全邊界。
@@ -117,42 +119,42 @@ public static class ReviewScreen
         for (int i = top; i < Math.Min(items.Count, top + listRows); i++)
         {
             var d = items[i];
-            var (icon, color) = d.Kind switch
+            (string icon, ThemeColor color) = d.Kind switch
             {
-                ChangeKind.Add => ("+", "#7ee787"),
-                ChangeKind.Change => ("~", "#e3b341"),
-                ChangeKind.Delete => ("-", "#ff7b72"),
-                _ => ("?", "grey"),
+                ChangeKind.Add => ("+", Theme.DiffAdd),
+                ChangeKind.Change => ("~", Theme.Warning),
+                ChangeKind.Delete => ("-", Theme.DiffDelete),
+                _ => ("?", Theme.TextMuted),
             };
             bool here = i == cursor;
-            var box = included[i] ? "[#3fb950]◉[/]" : "[grey39]○[/]";
-            var bar = here ? "[orange3]▌[/]" : " ";
+            var box = included[i] ? $"[{Theme.Success}]◉[/]" : $"[{Theme.TextFaint}]○[/]";
+            var bar = here ? $"[{Theme.Accent}]▌[/]" : " ";
             var type = ConsoleUI.Esc(PadType(d.ObjectTypeName));
             var nameMax = Math.Max(10, w - 18);
             var name = ConsoleUI.Esc(ConsoleUI.Truncate(d.Name, nameMax));
-            var nameMarkup = here ? $"[bold orange3]{name}[/]" : $"[grey85]{name}[/]";
-            var typeMarkup = here ? $"[grey62]{type}[/]" : $"[grey42]{type}[/]";
+            var nameMarkup = here ? $"[bold {Theme.Accent}]{name}[/]" : $"[{Theme.TextSecondary}]{name}[/]";
+            var typeMarkup = here ? $"[{Theme.TextSecondary}]{type}[/]" : $"[{Theme.TextMuted}]{type}[/]";
             ConsoleUI.Line($"{bar} {box} [{color}]{icon}[/] {typeMarkup} {nameMarkup}");
         }
 
         // ── 預覽區：先空一行，再以細規則線＋小標籤明確切出與清單的界線，營造留白與層次。
         var cur = items[cursor];
-        var (kindColor, action) = cur.Kind switch
+        (ThemeColor kindColor, string action) = cur.Kind switch
         {
-            ChangeKind.Add => ("#7ee787", "新增"),
-            ChangeKind.Change => ("#e3b341", "變更"),
-            ChangeKind.Delete => ("#ff7b72", "刪除"),
-            _ => ("grey", "其他"),
+            ChangeKind.Add => (Theme.DiffAdd, "新增"),
+            ChangeKind.Change => (Theme.Warning, "變更"),
+            ChangeKind.Delete => (Theme.DiffDelete, "刪除"),
+            _ => (Theme.TextMuted, "其他"),
         };
         int previewRows = Math.Max(4, h - 10 - listRows);
         var lines = BuildPreviewLines(cur.SourceScript, cur.TargetScript, ignoreWhitespace, w, previewRows, out int diffCount);
 
         ConsoleUI.Line();
         var label = "預覽";
-        ConsoleUI.Line($"[grey42]{label}[/] [grey23]{new string('─', Math.Max(2, w - ConsoleUI.DisplayWidth(label) - 1))}[/]");
+        ConsoleUI.Line($"[{Theme.TextMuted}]{label}[/] [{Theme.Hairline}]{new string('─', Math.Max(2, w - ConsoleUI.DisplayWidth(label) - 1))}[/]");
         var nm = ConsoleUI.Esc(ConsoleUI.Truncate(cur.Name, Math.Max(10, w - 34)));
-        ConsoleUI.Line($"[bold grey93]{nm}[/]　[{kindColor}]●[/] [grey54]{action}[/] [grey30]·[/] " +
-                       $"[grey42]{diffCount} 處差異[/]　[grey30]·[/] [#7ee787]▏[/][grey46]新版[/] [#ff7b72]▏[/][grey46]原版[/]");
+        ConsoleUI.Line($"[bold {Theme.TextPrimary}]{nm}[/]　[{kindColor}]●[/] [{Theme.TextMuted}]{action}[/] [{Theme.Hairline}]·[/] " +
+                       $"[{Theme.TextMuted}]{diffCount} 處差異[/]　[{Theme.Hairline}]·[/] [{Theme.DiffAdd}]▏[/][{Theme.TextMuted}]新版[/] [{Theme.DiffDelete}]▏[/][{Theme.TextMuted}]原版[/]");
         foreach (var line in lines) ConsoleUI.Line(line);
         ConsoleUI.EndFrame();
     }
@@ -163,12 +165,12 @@ public static class ReviewScreen
         return type.Length >= 8 ? type[..8] : type.PadRight(8);
     }
 
-    // 預覽色盤（GitHub Dark 風，柔和不刺眼，呈現精緻感）。
-    private const string AddColor = "#7ee787";   // 新版（更版）文字
-    private const string DelColor = "#ff7b72";   // 原版（被取代）文字
-    private const string CtxColor = "grey58";    // 未變更（context）文字
-    private const string NumColor = "grey35";    // 行號
-    private const string BarCtx = "grey23";      // context 左側細邊
+    // 預覽色盤取自佈景主題的 diff token（語意化，隨主題切換）。
+    private static string AddColor => Theme.DiffAdd.ToString();       // 新版（更版）文字
+    private static string DelColor => Theme.DiffDelete.ToString();    // 原版（被取代）文字
+    private static string CtxColor => Theme.DiffContext.ToString();   // 未變更（context）文字
+    private static string NumColor => Theme.DiffGutter.ToString();    // 行號
+    private static string BarCtx => Theme.DiffBar.ToString();         // context 左側細邊
 
     /// <summary>
     /// 產生 unified 風格的預覽 markup 列，折疊相同段落，限制寬高。
@@ -200,7 +202,7 @@ public static class ReviewScreen
         {
             if (outLines.Count >= maxRows)
             {
-                outLines.Add($"[{BarCtx}]▏[/] [grey35]{new string(' ', gw)}[/] [grey42]… 內容過長，完整差異請見 HTML 報告[/]");
+                outLines.Add($"[{BarCtx}]▏[/] [{Theme.DiffGutter}]{new string(' ', gw)}[/] [{Theme.TextMuted}]… 內容過長，完整差異請見 HTML 報告[/]");
                 break;
             }
             switch (r.Kind)
@@ -209,7 +211,7 @@ public static class ReviewScreen
                     if (contextRun < maxContext)
                         outLines.Add(Row(BarCtx, Gutter(r.LeftNumber), r.Right, CtxColor));
                     else if (contextRun == maxContext)
-                        outLines.Add($"[{BarCtx}]▏[/] [grey30]{new string(' ', gw)} ⋯[/]");
+                        outLines.Add($"[{BarCtx}]▏[/] [{Theme.Hairline}]{new string(' ', gw)} ⋯[/]");
                     contextRun++;
                     break;
                 case DiffKind.Removed:
@@ -229,7 +231,7 @@ public static class ReviewScreen
                     break;
             }
         }
-        if (outLines.Count == 0) outLines.Add($"[{BarCtx}]▏[/] [grey42](無內容差異)[/]");
+        if (outLines.Count == 0) outLines.Add($"[{BarCtx}]▏[/] [{Theme.TextMuted}](無內容差異)[/]");
         return outLines;
     }
 

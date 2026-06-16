@@ -10,8 +10,17 @@ public sealed record AppInfo
     /// <summary>可執行檔／命令名稱（如 myapp），用於命令列說明與提示。</summary>
     public required string ExecutableName { get; init; }
 
-    /// <summary>顯示名稱（如 MyApp），用於 Banner 大字 Logo。</summary>
+    /// <summary>顯示名稱（如 MyApp），用於 Banner 副標題與一般文字。</summary>
     public required string DisplayName { get; init; }
+
+    /// <summary>
+    /// 短版字標（如 MyApp 的縮寫），用於 Banner 大字 Logo；名稱過長時以此維持 Logo 精緻。
+    /// 未設定則沿用 <see cref="DisplayName"/>。
+    /// </summary>
+    public string? Wordmark { get; init; }
+
+    /// <summary>大字 Logo 實際採用的字樣：有 <see cref="Wordmark"/> 用之，否則退回 <see cref="DisplayName"/>。</summary>
+    public string LogoText => string.IsNullOrWhiteSpace(Wordmark) ? DisplayName : Wordmark;
 
     /// <summary>主標語（顯示於 Banner 規則線）。</summary>
     public string PrimaryTagline { get; init; } = string.Empty;

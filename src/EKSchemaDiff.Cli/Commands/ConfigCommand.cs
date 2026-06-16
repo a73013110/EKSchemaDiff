@@ -37,7 +37,7 @@ public sealed class ConfigCommand : Command<ConfigSettings>
         if (config is null || config.Profiles.Count == 0)
         {
             AnsiConsole.MarkupLineInterpolated(
-                $"[yellow]{(useGlobal ? "全域" : "專案")}設定沒有任何 profile。請先執行 eksd（主選單）建立連線，或 eksd init。[/]");
+                $"[{Theme.Warning}]{(useGlobal ? "全域" : "專案")}設定沒有任何 profile。請先執行 eksd（主選單）建立連線，或 eksd init。[/]");
             return ExitCode.UsageError;
         }
 
@@ -49,7 +49,7 @@ public sealed class ConfigCommand : Command<ConfigSettings>
         SettingsEditor.Edit(profile, _banner);
 
         var path = useGlobal ? store.SaveGlobal(config) : store.SaveProject(config);
-        AnsiConsole.MarkupLineInterpolated($"[green]已儲存：{path}[/]");
+        AnsiConsole.MarkupLineInterpolated($"[{Theme.Success}]已儲存：{path}[/]");
         return ExitCode.Ok;
     }
 }

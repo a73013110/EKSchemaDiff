@@ -35,6 +35,9 @@ public static class Menu
         }
 
         int cursor = SkipSeparators(items, Math.Clamp(initial, 0, items.Count - 1), +1);
+        // 進入畫面時清一次（只此一次，非每格重繪），抹掉上一個全螢幕畫面（如選 profile）的殘留。
+        // 之後的逐格重繪維持無閃爍策略（BeginFrame 歸位 + 逐行清行尾 + 清到底）。
+        AnsiConsole.Clear();
         try
         {
             Console.CursorVisible = false;
@@ -98,8 +101,9 @@ public static class Menu
 
         int w = ConsoleUI.Width;
         // 可見列數：上限為終端高度可容納列數（至少 4），但不超過實際項目數。
+        // 扣除的固定開銷＝Banner（留白+Logo+副標 約 9 列）＋標題/空白/說明/頁尾。
         // 注意不可用 Math.Clamp(x, 4, items.Count)：當項目數 < 4 時 min>max 會丟 ArgumentException。
-        int visible = Math.Min(items.Count, Math.Max(4, ConsoleUI.Height - 9));
+        int visible = Math.Min(items.Count, Math.Max(4, ConsoleUI.Height - 11));
         int top = ConsoleUI.ScrollTop(cursor, items.Count, visible);
 
         for (int i = top; i < Math.Min(items.Count, top + visible); i++)
@@ -109,12 +113,12 @@ public static class Menu
             {
                 // 有標題的分隔列當「分類標題」呈現；沒有就畫一條淡線。
                 ConsoleUI.Line(string.IsNullOrWhiteSpace(it.Label)
-                    ? "  [grey39]──────────[/]"
+                    ? $"  [{Theme.Hairline}]──────────[/]"
                     : $"  {it.Label}");
                 continue;
             }
             if (i == cursor)
-                ConsoleUI.Line($"[orange3]>[/] {it.Label}");
+                ConsoleUI.Line($"[{Theme.Accent}]›[/] {it.Label}");
             else
                 ConsoleUI.Line($"  {it.Label}");
         }
@@ -122,8 +126,8 @@ public static class Menu
         var desc = items[cursor].Description;
         ConsoleUI.Line();
         if (!string.IsNullOrWhiteSpace(desc))
-            ConsoleUI.Line($"[grey]{ConsoleUI.Esc(ConsoleUI.Truncate(desc!, w - 2))}[/]");
-        ConsoleUI.Line(footer ?? "[grey39]↑↓ 移動 · Enter 選擇 · Esc 返回[/]");
+            ConsoleUI.Line($"[{Theme.TextMuted}]{ConsoleUI.Esc(ConsoleUI.Truncate(desc!, w - 2))}[/]");
+        ConsoleUI.Line(footer ?? $"[{Theme.TextFaint}]↑↓ 移動 · Enter 選擇 · Esc 返回[/]");
         ConsoleUI.EndFrame();
     }
 }

@@ -34,7 +34,7 @@ public sealed class InitCommand : Command<InitSettings>
 
         if (File.Exists(path) && !settings.Force)
         {
-            AnsiConsole.MarkupLineInterpolated($"[yellow]已存在：{path}[/]（用 --force 覆寫）");
+            AnsiConsole.MarkupLineInterpolated($"[{Theme.Warning}]已存在：{path}[/]（用 --force 覆寫）");
             return ExitCode.UsageError;
         }
 
@@ -72,9 +72,9 @@ public sealed class InitCommand : Command<InitSettings>
 
         Directory.CreateDirectory(dir);
         File.WriteAllText(path, _configStores.Serialize(config), new System.Text.UTF8Encoding(false));
-        AnsiConsole.MarkupLineInterpolated($"[green]已建立：{path}[/]");
+        AnsiConsole.MarkupLineInterpolated($"[{Theme.Success}]已建立：{path}[/]");
         AnsiConsole.MarkupLine("請填入 [bold]server / database / user / password[/]，或執行 [bold]eksd[/] 從主選單以互動方式設定。");
-        AnsiConsole.MarkupLine("[grey]提示：設定檔放在本機，可直接填明碼；若想避免明碼，password 可用 ${env:變數名}。[/]");
+        AnsiConsole.MarkupLine($"[{Theme.TextMuted}]提示：設定檔放在本機，可直接填明碼；若想避免明碼，password 可用 ${{env:變數名}}。[/]");
         return ExitCode.Ok;
     }
 }

@@ -65,7 +65,7 @@ public static class ConsoleUI
     {
         AnsiConsole.Markup(promptMarkup);
         if (!string.IsNullOrEmpty(defaultValue))
-            AnsiConsole.Markup($"[grey39]({Markup.Escape(defaultValue)})[/] ");
+            AnsiConsole.Markup($"[{Theme.TextFaint}]({Markup.Escape(defaultValue)})[/] ");
 
         Console.CursorVisible = true;
         var buf = new System.Text.StringBuilder();

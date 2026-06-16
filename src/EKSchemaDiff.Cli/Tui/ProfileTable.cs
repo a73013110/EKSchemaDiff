@@ -8,7 +8,7 @@ public static class ProfileTable
 {
     public static Table Build(IReadOnlyList<Profile> profiles, string? defaultProfile)
     {
-        var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey39);
+        var table = new Table().Border(TableBorder.Rounded).BorderColor(Theme.TextFaint.ToSpectre());
         table.AddColumn("Profile");
         table.AddColumn("來源（更版）");
         table.AddColumn("目標（原版）");
@@ -19,10 +19,10 @@ public static class ProfileTable
         {
             var isDefault = string.Equals(p.Name, defaultProfile, StringComparison.OrdinalIgnoreCase);
             table.AddRow(
-                isDefault ? $"[bold]{Markup.Escape(p.Name)}[/] [grey](預設)[/]" : Markup.Escape(p.Name),
+                isDefault ? $"[bold]{Markup.Escape(p.Name)}[/] [{Theme.TextMuted}](預設)[/]" : Markup.Escape(p.Name),
                 Markup.Escape(p.Source.ToSafeDisplay()),
                 Markup.Escape(p.Target.ToSafeDisplay()),
-                p.CompareOptions.IgnorePermissions ? "[green]是[/]" : "[red]否[/]",
+                p.CompareOptions.IgnorePermissions ? $"[{Theme.Success}]是[/]" : $"[{Theme.Danger}]否[/]",
                 Markup.Escape(p.ExportOptions.Describe()));
         }
         return table;

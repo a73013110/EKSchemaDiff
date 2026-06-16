@@ -1,4 +1,5 @@
 using ConsoleKit.Diagnostics;
+using ConsoleKit.Tui;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -67,10 +68,10 @@ public static class ConsoleHost
                 appLog.Error("頂層未處理例外，程式即將終止", ex);
                 try
                 {
-                    AnsiConsole.MarkupLineInterpolated($"[red]發生未預期錯誤：{ex.Message}[/]");
+                    AnsiConsole.MarkupLineInterpolated($"[{Theme.Danger}]發生未預期錯誤：{ex.Message}[/]");
                     if (appLog.FilePath is not null)
-                        AnsiConsole.MarkupLineInterpolated($"[grey]詳細記錄已寫入：{appLog.FilePath}[/]");
-                    AnsiConsole.MarkupLine("[grey]按 Enter 結束…[/]");
+                        AnsiConsole.MarkupLineInterpolated($"[{Theme.TextMuted}]詳細記錄已寫入：{appLog.FilePath}[/]");
+                    AnsiConsole.MarkupLine($"[{Theme.TextMuted}]按 Enter 結束…[/]");
                     if (!Console.IsInputRedirected) Console.ReadLine();
                 }
                 catch { /* 連終端輸出都失敗時，至少 log 已寫入 */ }

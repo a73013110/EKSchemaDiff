@@ -15,12 +15,12 @@ public sealed class ProfilesCommand : Command
         var store = _configStores.Discover();
         if (store.Effective.Profiles.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]尚無 profile。請執行 eksd init。[/]");
+            AnsiConsole.MarkupLine($"[{Theme.Warning}]尚無 profile。請執行 eksd init。[/]");
             return ExitCode.UsageError;
         }
 
-        AnsiConsole.MarkupLineInterpolated($"[grey]專案設定：{store.ProjectConfigPath ?? "(無)"}[/]");
-        AnsiConsole.MarkupLineInterpolated($"[grey]全域設定：{store.GlobalConfigPath}[/]");
+        AnsiConsole.MarkupLineInterpolated($"[{Theme.TextMuted}]專案設定：{store.ProjectConfigPath ?? "(無)"}[/]");
+        AnsiConsole.MarkupLineInterpolated($"[{Theme.TextMuted}]全域設定：{store.GlobalConfigPath}[/]");
         AnsiConsole.WriteLine();
 
         AnsiConsole.Write(ProfileTable.Build(store.Effective.Profiles, store.Effective.DefaultProfile));

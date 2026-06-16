@@ -14,8 +14,8 @@ public static class ProfileEditor
     {
         AnsiConsole.Clear();
         banner.Show();
-        AnsiConsole.MarkupLine("[orange3]新增 / 編輯連線設定[/]　[grey](設定檔放本機，可直接填明碼)[/]");
-        AnsiConsole.MarkupLine("[grey39]逐欄輸入，Enter 確認該欄；任一欄位按 [bold]Esc[/] 取消並返回主選單。[/]");
+        AnsiConsole.MarkupLine($"[{Theme.Accent}]新增 / 編輯連線設定[/]　[{Theme.TextMuted}](設定檔放本機，可直接填明碼)[/]");
+        AnsiConsole.MarkupLine($"[{Theme.TextFaint}]逐欄輸入，Enter 確認該欄；任一欄位按 [bold]Esc[/] 取消並返回主選單。[/]");
         AnsiConsole.WriteLine();
 
         try
@@ -30,10 +30,10 @@ public static class ProfileEditor
             var profile = existing ?? new Profile { Name = name };
             profile.Name = name;
 
-            AnsiConsole.MarkupLine("\n[grey]── 來源（更版內容的依據；差異報告左側）──[/]");
+            AnsiConsole.MarkupLine($"\n[{Theme.TextMuted}]── 來源（更版內容的依據；差異報告左側）──[/]");
             profile.Source = PromptConnection(profile.Source);
 
-            AnsiConsole.MarkupLine("\n[grey]── 目標（被更新對象；差異報告右側）──[/]");
+            AnsiConsole.MarkupLine($"\n[{Theme.TextMuted}]── 目標（被更新對象；差異報告右側）──[/]");
             profile.Target = PromptConnection(profile.Target);
 
             profile.OutputDir = Ask("輸出目錄：",
@@ -48,13 +48,13 @@ public static class ProfileEditor
             var path = store.SaveProject(config, dir);
             Console.CursorVisible = false;
 
-            AnsiConsole.MarkupLineInterpolated($"[green]已儲存：{path}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[{Theme.Success}]已儲存：{path}[/]");
             return true;
         }
         catch (CancelException)
         {
             Console.CursorVisible = false;
-            AnsiConsole.MarkupLine("[yellow]已取消，未儲存。[/]");
+            AnsiConsole.MarkupLine($"[{Theme.Warning}]已取消，未儲存。[/]");
             return false;
         }
     }
@@ -76,7 +76,7 @@ public static class ProfileEditor
         {
             authChoice = Ask("  驗證方式（1=SQL 帳密登入　2=Windows 整合驗證）：", defaultAuth).Trim();
             if (authChoice is "1" or "2") break;
-            AnsiConsole.MarkupLine("  [yellow]請輸入 1 或 2。[/]");
+            AnsiConsole.MarkupLine($"  [{Theme.Warning}]請輸入 1 或 2。[/]");
         }
         c.Auth = authChoice == "2" ? "integrated" : "sql";
 
@@ -92,7 +92,7 @@ public static class ProfileEditor
     /// <summary>讀一個文字欄位；按 Esc 取消整個流程。空白沿用預設。</summary>
     private static string Ask(string label, string? defaultValue)
     {
-        var input = ConsoleUI.ReadLineOrEsc($"[white]{Markup.Escape(label)}[/]", defaultValue);
+        var input = ConsoleUI.ReadLineOrEsc($"[{Theme.TextPrimary}]{Markup.Escape(label)}[/]", defaultValue);
         if (input is null) throw new CancelException();
         return input;
     }

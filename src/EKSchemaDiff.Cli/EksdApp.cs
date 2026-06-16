@@ -10,6 +10,7 @@ public static class EksdApp
     {
         ExecutableName = "eksd",
         DisplayName = "EKSchemaDiff",
+        Wordmark = "EKSD",
         PrimaryTagline = "SQL Server 結構比對",
         SecondaryTagline = "發版差異 CLI",
         Author = "Yikai",
