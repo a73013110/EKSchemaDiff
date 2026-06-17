@@ -8,6 +8,7 @@ using Spectre.Console.Cli;
 return ConsoleHost.Run<HomeCommand>(
     EksdApp.Info,
     args,
+    theme: EksdTheme.Champagne,
     configureServices: services =>
     {
         services.AddSingleton<Banner>();

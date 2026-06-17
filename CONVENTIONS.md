@@ -62,3 +62,25 @@
 - `MarkupLineInterpolated` / `MarkupInterpolated`：插值洞**會自動跳脫**，**不可**再手動 `Markup.Escape`（否則雙重跳脫）。
 - `MarkupLine` / `Markup` / `new Rule(...)` / `.Title(...)` 等以字串組裝動態值時，動態值**必須** `Markup.Escape` 或 `ConsoleUI.Esc`。
 - 只有開發者手寫的靜態樣式標籤（`[red]...[/]`）才視為可信 markup。
+
+## K. 拆版到新 CLI（ConsoleKit 邊界）
+
+`ConsoleKit` 是「中性骨架」：它對領域**零依賴**，可整包複製成任何新 CLI 的起點。維護時請守住下列邊界，避免領域回滲。
+
+### K1. 依賴方向（單向，不可逆）
+- `ConsoleKit` 為基礎，**無任何專案相依**、**不得**參考 `EKSchemaDiff.*`。
+- `Report → ConsoleKit`、`Core → ConsoleKit + Report`、`Cli → ConsoleKit + Core + Report`。
+- 新增 `ConsoleKit` 對任一領域專案的參考＝架構破壞，CI/review 必擋。
+
+### K2. 什麼放骨架、什麼放領域
+- **放 `ConsoleKit`**：與領域無關、可被任何 CLI 複用的能力——Host/DI、TUI 元件、佈景、記錄器、分層設定機制、**文字差異引擎（`ConsoleKit.Text`）**、**`${env:VAR}` 插值（`ConsoleKit.Configuration.EnvInterpolation`）**。判準：拿掉 EKSchemaDiff 仍成立。
+- **放領域**：DacFx 比對、設定模型（`Profile`/`EksdConfig`…）、HTML 報告樣板、品牌字串與品牌色票。
+- 灰色地帶以 §A.10「骨架不得出現品牌字串」為終審：只要需要寫出 `eksd`/`EKSchemaDiff`/領域語彙，就**不**屬於骨架。
+
+### K3. 領域接骨架的三個介接點（照抄即可拆版）
+1. **品牌與路徑** → 寫一份 `AppInfo`（record），交給 `ConsoleHost.Run`。骨架所有品牌/路徑/版號皆取自它。
+2. **佈景色票** → 骨架 `Theme` 只內建中性預設 `ThemePalette.Neutral`；品牌外觀由領域寫一份 `ThemePalette`（如 `EksdTheme.Champagne`），在組合根以 `ConsoleHost.Run(..., theme: ...)` 注入。**不得**把品牌色票寫回 `ConsoleKit`。
+3. **領域設定** → 骨架提供泛型 `LayeredConfigStore<TConfig>(options, createEmpty, merge)`；領域注入自己的 `TConfig` 與合併語義，再包出領域 API（參考 `ConfigStoreFactory`/`ConfigStore`）。
+
+### K4. 共用引擎的單一真相來源
+- 差異「計算」只有一處：`ConsoleKit.Text.DiffEngine`。TUI 預覽（`ReviewScreen`/`DiffScreen`）與 HTML 報告（`HtmlReportBuilder`）**必須**呼叫同一個 `DiffEngine.Compare`，僅「上色／呈現」各自實作。**嚴禁**在任一端另起爐灶複製 diff 演算法——否則預覽與報告會悄悄分岔。

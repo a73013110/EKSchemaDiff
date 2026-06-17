@@ -1,6 +1,6 @@
 using System.Text;
+using ConsoleKit.Text;
 using ConsoleKit.Tui;
-using EKSchemaDiff.Report;
 
 namespace EKSchemaDiff.Cli.Tui;
 

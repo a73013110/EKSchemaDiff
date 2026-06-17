@@ -2,7 +2,7 @@ using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
 
-namespace EKSchemaDiff.Report;
+namespace ConsoleKit.Text;
 
 public enum DiffKind { Same, Modified, Added, Removed }
 
@@ -31,6 +31,7 @@ public sealed class DiffRow
 /// 逐行差異引擎，後端為 DiffPlex 的 <see cref="SideBySideDiffBuilder"/>：
 /// 行級對齊用 LCS，Modified 行再做字詞級（word-level）子差異，產出行內高亮所需的片段。
 /// 方向：左＝更版（DiffPlex 的 new），右＝原版（DiffPlex 的 old）。
+/// 中性元件：純文字進、純資料出，與任何領域與呈現方式（TUI／HTML）無關，故置於骨架。
 /// </summary>
 public static class DiffEngine
 {

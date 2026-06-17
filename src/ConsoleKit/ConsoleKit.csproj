@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="DiffPlex" Version="1.9.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
     <PackageReference Include="Spectre.Console" Version="0.57.0" />
     <PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />

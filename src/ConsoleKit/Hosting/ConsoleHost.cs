@@ -15,15 +15,18 @@ public static class ConsoleHost
     /// <summary>
     /// 啟動並執行 CLI。<paramref name="configureServices"/> 註冊領域服務、
     /// <paramref name="configureCommands"/> 註冊命令（應用名稱已預設為 AppInfo.ExecutableName）。
+    /// <paramref name="theme"/> 為領域端色票；省略則沿用骨架內建的中性預設。
     /// </summary>
     public static int Run<TDefaultCommand>(
         AppInfo app,
         string[] args,
         Action<IServiceCollection>? configureServices = null,
-        Action<IConfigurator>? configureCommands = null)
+        Action<IConfigurator>? configureCommands = null,
+        ThemePalette? theme = null)
         where TDefaultCommand : class, ICommand
     {
         NativeConsole.EnableVirtualTerminal();
+        if (theme is not null) Theme.Use(theme);
 
         // 記錄器由 Host 直接建立並擁有（非經 DI 解析），才能在 Run 前就記錄 DI/命令設定階段的錯誤。
         FileAppLog? appLog = null;

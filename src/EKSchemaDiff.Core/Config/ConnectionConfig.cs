@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using ConsoleKit.Configuration;
 using Microsoft.Data.SqlClient;
 
 namespace EKSchemaDiff.Core.Config;

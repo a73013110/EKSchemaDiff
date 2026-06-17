@@ -122,6 +122,33 @@ public static class ConsoleUI
     }
 
     /// <summary>
+    /// 停用終端自動換行（DECAWM，<c>ESC[?7l</c>）：逐格重繪時，可見寬度逼近視窗寬的一行會被截在
+    /// 右邊界、**不**折成第二實體列；否則實體行數 &gt; 邏輯行數會撐破預算的幀高，使 <see cref="BeginFrame"/>
+    /// 的歸位基準逐格漂移、畫面整體上移殘留——這是「內容一多就壞」的元兇。與 <see cref="EnableLineWrap"/> 成對。
+    /// </summary>
+    public static void DisableLineWrap() => Console.Out.Write(Vt + "[?7l");
+
+    /// <summary>恢復終端自動換行（<c>ESC[?7h</c>）。離開逐格重繪畫面時呼叫，避免污染正常輸出。</summary>
+    public static void EnableLineWrap() => Console.Out.Write(Vt + "[?7h");
+
+    /// <summary>
+    /// 進入逐格重繪模式：隱藏游標並停用自動換行。與 <see cref="ExitRedrawMode"/> 成對。
+    /// 從子畫面（如 DiffScreen）返回後**需再呼叫一次**重新確立——子畫面離開時會還原這些終端狀態。
+    /// </summary>
+    public static void EnterRedrawMode()
+    {
+        try { Console.CursorVisible = false; } catch { /* 重導向或不支援時略過 */ }
+        DisableLineWrap();
+    }
+
+    /// <summary>離開逐格重繪模式：恢復自動換行並顯示游標。應置於畫面的 finally。</summary>
+    public static void ExitRedrawMode()
+    {
+        EnableLineWrap();
+        try { Console.CursorVisible = true; } catch { /* 重導向或不支援時略過 */ }
+    }
+
+    /// <summary>
     /// 開始重繪一格：游標歸位到左上，但不做整頁 Console.Clear()（那會在 Windows 造成閃爍）。
     /// 配合每行的 Line()（清到行尾）與 EndFrame()（清到畫面底）即可無閃爍覆寫。
     /// </summary>

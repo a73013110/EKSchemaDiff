@@ -1,6 +1,6 @@
+using ConsoleKit.Text;
 using ConsoleKit.Tui;
 using EKSchemaDiff.Core.Compare;
-using EKSchemaDiff.Report;
 using Spectre.Console;
 
 namespace EKSchemaDiff.Cli.Tui;
@@ -38,7 +38,7 @@ public static class DiffScreen
         AnsiConsole.Clear();
         try
         {
-            Console.CursorVisible = false;
+            ConsoleUI.EnterRedrawMode();
             while (true)
             {
                 int w = ConsoleUI.Width;
@@ -95,7 +95,7 @@ public static class DiffScreen
         }
         finally
         {
-            Console.CursorVisible = true;
+            ConsoleUI.ExitRedrawMode();
         }
     }
 

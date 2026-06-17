@@ -40,7 +40,7 @@ public static class Menu
         AnsiConsole.Clear();
         try
         {
-            Console.CursorVisible = false;
+            ConsoleUI.EnterRedrawMode();
             while (true)
             {
                 items = itemsProvider();
@@ -62,6 +62,9 @@ public static class Menu
                     case ConsoleKey.Enter:
                         if (onActivate is null || !onActivate(cursor))
                             return cursor;
+                        // onActivate 可能跑過 Spectre 提示（如設定頁的文字輸入），會還原游標與自動換行；
+                        // 返回後重新確立逐格重繪模式，避免後續重繪因 autowrap 而漂移。
+                        ConsoleUI.EnterRedrawMode();
                         break;
                     case ConsoleKey.Escape:
                         return -1;
@@ -70,7 +73,7 @@ public static class Menu
         }
         finally
         {
-            Console.CursorVisible = true;
+            ConsoleUI.ExitRedrawMode();
         }
     }
 

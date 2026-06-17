@@ -1,4 +1,4 @@
-namespace EKSchemaDiff.Report;
+namespace ConsoleKit.Text;
 
 /// <summary>
 /// 攤平後的一筆顯示列：<see cref="Row"/> 非 null 表示一筆差異列；

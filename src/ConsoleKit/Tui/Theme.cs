@@ -97,18 +97,19 @@ public sealed record ThemePalette
     public required ThemeColor BannerBottom { get; init; }
 
     /// <summary>
-    /// 香檳金（暖金）主題：中性灰為底、單一香檳金強調，Banner 走金屬漸層。
-    /// 強調色克制，靠中性階的明度層次建立秩序——終端機版的「Apple 高級感」。
+    /// 骨架內建的中性預設色票（鋼灰）：中性灰為底、克制的鋼藍強調，Banner 走銀／鋼金屬漸層。
+    /// 不帶任何品牌個性，純粹讓骨架「開箱即有合理外觀」；領域端應提供自己的 <see cref="ThemePalette"/>
+    /// 並於組合根注入（見 <c>ConsoleHost.Run</c> 的 theme 參數），覆蓋此預設。
     /// </summary>
-    public static ThemePalette Champagne { get; } = new()
+    public static ThemePalette Neutral { get; } = new()
     {
-        Name = "champagne",
+        Name = "neutral",
 
-        Accent = new("#C8A45C"),
+        Accent = new("#7FA8C9"),
 
-        TextPrimary = new("#F5F5F7"),
-        TextSecondary = new("#B0B0B5"),
-        TextMuted = new("#86868B"),
+        TextPrimary = new("#F0F0F2"),
+        TextSecondary = new("#B5B5BA"),
+        TextMuted = new("#8A8A90"),
         TextFaint = new("#6E6E73"),
         Hairline = new("#3A3A3C"),
 
@@ -118,13 +119,13 @@ public sealed record ThemePalette
 
         DiffAdd = new("#7EE787"),
         DiffDelete = new("#FF7B72"),
-        DiffContext = new("#86868B"),
+        DiffContext = new("#8A8A90"),
         DiffGutter = new("#6E6E73"),
         DiffBar = new("#3A3A3C"),
 
-        BannerTop = new("#EAD29A"),
-        BannerMid = new("#C8A45C"),
-        BannerBottom = new("#7E6838"),
+        BannerTop = new("#D8DEE4"),
+        BannerMid = new("#9AA4AE"),
+        BannerBottom = new("#5A636C"),
     };
 }
 
@@ -135,10 +136,13 @@ public sealed record ThemePalette
 /// </summary>
 public static class Theme
 {
-    /// <summary>目前生效的色票。預設香檳金；未來可由設定檔載入並切換。</summary>
-    public static ThemePalette Current { get; private set; } = ThemePalette.Champagne;
+    /// <summary>
+    /// 目前生效的色票。預設為骨架內建的中性 <see cref="ThemePalette.Neutral"/>；
+    /// 領域端於組合根透過 <c>ConsoleHost.Run</c> 的 theme 參數（或直接呼叫 <see cref="Use"/>）覆蓋。
+    /// </summary>
+    public static ThemePalette Current { get; private set; } = ThemePalette.Neutral;
 
-    /// <summary>切換主題（未來提供「主題切換」功能時呼叫）。</summary>
+    /// <summary>切換主題：組合根注入領域色票，或未來提供「主題切換」功能時呼叫。</summary>
     public static void Use(ThemePalette palette) =>
         Current = palette ?? throw new ArgumentNullException(nameof(palette));
 

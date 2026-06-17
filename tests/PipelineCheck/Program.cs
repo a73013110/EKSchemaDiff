@@ -1,3 +1,4 @@
+using ConsoleKit.Text;
 using EKSchemaDiff.Core.Scripting;
 using EKSchemaDiff.Report;
 
@@ -84,14 +85,14 @@ changed[19] = "line 20 CHANGED";   // 第 20 行內容變更
 string baseText = string.Join("\n", baseLines);
 string changedText = string.Join("\n", changed);
 
-var foldRows = EKSchemaDiff.Report.DiffEngine.Compare(changedText, baseText, false);
-var folded = EKSchemaDiff.Report.DiffView.Flatten(foldRows, full: false, contextLines: 3);
-var entire = EKSchemaDiff.Report.DiffView.Flatten(foldRows, full: true, contextLines: 3);
+var foldRows = DiffEngine.Compare(changedText, baseText, false);
+var folded = DiffView.Flatten(foldRows, full: false, contextLines: 3);
+var entire = DiffView.Flatten(foldRows, full: true, contextLines: 3);
 
 bool foldHasSummary = folded.Any(d => d.IsFold && d.HiddenCount > 0);
 bool foldIsCompact = folded.Count < entire.Count;
 bool fullKeepsAll = entire.Count == foldRows.Count && entire.All(d => !d.IsFold);
-bool foldKeepsChange = folded.Any(d => d.Row?.Kind == EKSchemaDiff.Report.DiffKind.Modified);
+bool foldKeepsChange = folded.Any(d => d.Row?.Kind == DiffKind.Modified);
 Console.WriteLine($"\n=== 差異折疊 DiffView.Flatten ===");
 Console.WriteLine($"  折疊列數={folded.Count}（含摘要={foldHasSummary}）；完整列數={entire.Count}；" +
                   $"折疊更精簡={foldIsCompact}；完整保留全部={fullKeepsAll}；折疊保留變更={foldKeepsChange}");

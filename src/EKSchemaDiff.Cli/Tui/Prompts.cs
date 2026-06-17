@@ -28,7 +28,7 @@ public static class Prompts
         AnsiConsole.Clear();
         try
         {
-            Console.CursorVisible = false;
+            ConsoleUI.EnterRedrawMode();
             while (true)
             {
                 RenderCards(profiles, cursor, banner);
@@ -52,7 +52,7 @@ public static class Prompts
         }
         finally
         {
-            Console.CursorVisible = true;
+            ConsoleUI.ExitRedrawMode();
         }
     }
 

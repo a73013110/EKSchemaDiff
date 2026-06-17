@@ -188,21 +188,22 @@ eksd
 
 ```
 src/
-  ConsoleKit/            # ★ 中性 CLI 骨架（零領域品牌）：Host、輕量 DI、TUI、記錄器、分層設定
+  ConsoleKit/            # ★ 中性 CLI 骨架（零領域品牌）：Host、輕量 DI、TUI、佈景、記錄器、分層設定、文字差異引擎
     AppInfo / ExitCode
     Hosting/             # ConsoleHost、ServiceCollectionTypeRegistrar、NativeConsole
-    Tui/                 # ConsoleUI、Menu、MenuItem、Banner、TextInput
+    Tui/                 # ConsoleUI、Menu、MenuItem、Banner、TextInput、Theme（內建中性預設色票）
+    Text/                # DiffEngine、DiffView（DiffPlex 逐行/行內差異；TUI 預覽與 HTML 報告共用同一引擎）
     Diagnostics/         # IAppLog、FileAppLog
-    Configuration/       # LayeredConfigStore<T>、LayeredConfigSnapshot、LayeredConfigOptions
-  EKSchemaDiff.Core/     # DacFx 比對包裝、設定模型、比對選項、部署腳本產生器（不依賴 ConsoleKit）
-  EKSchemaDiff.Report/   # LCS 差異引擎 + 暖色 HTML 樣板（零依賴）
-  EKSchemaDiff.Cli/      # 領域命令、TUI 領域畫面、ConfigStore/工廠、比對流程
-    EksdApp / EksdExitCode
+    Configuration/       # LayeredConfigStore<T>、LayeredConfigSnapshot、LayeredConfigOptions、EnvInterpolation
+  EKSchemaDiff.Core/     # DacFx 比對包裝、設定模型、比對選項、部署腳本產生器
+  EKSchemaDiff.Report/   # 暖色 HTML 樣板（消費 ConsoleKit.Text 的差異引擎）
+  EKSchemaDiff.Cli/      # 領域命令、TUI 領域畫面、ConfigStore/工廠、比對流程、品牌色票
+    EksdApp / EksdTheme / EksdExitCode
 tests/
   PipelineCheck/         # 離線管線測試（部署腳本產生器 + 報告 + 分層設定，免連線）
 ```
 
-依賴方向：`ConsoleKit ⟂ Core`（互不依賴）；`Report` 零依賴；`Core` 參考 `Report`；`Cli` 參考三者並作為組合根。命名與用語規範見 [CONVENTIONS.md](CONVENTIONS.md)。
+依賴方向：`ConsoleKit` 為基礎骨架（無專案相依、對領域零依賴）；`Report → ConsoleKit`、`Core → ConsoleKit + Report`、`Cli → ConsoleKit + Core + Report`（組合根）。命名、用語與拆版規範見 [CONVENTIONS.md](CONVENTIONS.md)。
 
 ### 拆版到新 CLI（複用 ConsoleKit）
 
@@ -210,10 +211,11 @@ tests/
 
 1. 複製 `ConsoleKit/` 專案，於新 CLI 的 `.csproj` 參考它（設定自己的 `AssemblyName`/`Product`/`Authors`）。
 2. 寫一份 `AppInfo`（執行檔名、顯示名、標語、設定檔名、log 環境變數等品牌與路徑）。
-3. `Program.cs` 呼叫 `ConsoleHost.Run<TDefaultCommand>(MyApp.Info, args, configureServices, configureCommands)`，在兩個委派裡註冊領域服務與命令。
-4. 撰寫領域命令（建構式注入 `AppInfo`/`IAppLog`/`Banner`/自家服務）與命令文字。
+3. （選用）寫一份品牌 `ThemePalette` 色票；不寫則沿用骨架內建的中性預設。
+4. `Program.cs` 呼叫 `ConsoleHost.Run<TDefaultCommand>(MyApp.Info, args, theme: MyTheme.Xxx, configureServices, configureCommands)`，在兩個委派裡註冊領域服務與命令。
+5. 撰寫領域命令（建構式注入 `AppInfo`/`IAppLog`/`Banner`/自家服務）與命令文字。
 
-骨架的 Host、輕量 DI、無閃爍 TUI、檔案記錄器、分層設定探索皆可直接沿用，無須改動。
+骨架的 Host、輕量 DI、無閃爍 TUI、佈景系統、檔案記錄器、分層設定探索、文字差異引擎（`ConsoleKit.Text`）與 `${env:VAR}` 插值（`ConsoleKit.Configuration.EnvInterpolation`）皆可直接沿用，無須改動。
 
 ## 授權
 
