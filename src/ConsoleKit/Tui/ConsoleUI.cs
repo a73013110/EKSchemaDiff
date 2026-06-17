@@ -164,6 +164,18 @@ public static class ConsoleUI
         Console.Out.Write(Vt + "[K\n");
     }
 
+    /// <summary>
+    /// 輸出整幀的「最後一列」：清除行尾殘留（<c>ESC[K</c>）但**不換行**，讓游標停在該列、
+    /// 不在畫面最底列觸發終端的底部捲動。這是把畫面鋪滿到最後一列（row h-1）又不讓整幀上移殘留的關鍵：
+    /// 用 <see cref="Line"/> 印滿 h 列時，最後一行的 <c>\n</c> 會把整幀往上頂一列；改以本方法收尾即可避免。
+    /// 必須是該幀最後一個輸出，後接 <see cref="EndFrame"/>。
+    /// </summary>
+    public static void LineLast(string markup = "")
+    {
+        AnsiConsole.Markup(markup);
+        Console.Out.Write(Vt + "[K");
+    }
+
     /// <summary>結束一格：清除游標以下到畫面底的所有殘留（處理上一格較高的情形）。</summary>
     public static void EndFrame()
     {

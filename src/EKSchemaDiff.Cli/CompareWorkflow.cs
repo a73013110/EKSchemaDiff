@@ -140,7 +140,9 @@ public sealed class CompareWorkflow
                 // 必須以 spinner 回饋，否則畫面會「一片黑」像當掉（ReviewScreen 離開時已 Clear()）。
                 _log.Step($"解析勾選 {included.Count}/{session.Differences.Count} 項（自動補齊相依，差異多時較慢）");
                 AnsiConsole.Clear();
-                _banner.Compact();
+                // 不墊尾端空白：下方的 AnsiConsole.Status() 互動式 spinner 會自行在上方墊一行，
+                // 否則會出現兩列空白（見 Banner.Compact 的 trailingBlank 說明）。
+                _banner.Compact(trailingBlank: false);
                 InclusionResult? resolved = null;
                 AnsiConsole.Status().Spinner(Spinner.Known.Dots)
                     .Start("正在套用勾選並整理相依物件…（為確保部署能順利執行，系統會自動補齊相依物件，請稍候）",
@@ -538,7 +540,8 @@ public sealed class CompareWorkflow
             Header = new PanelHeader(" 比對情境 "),
             Border = BoxBorder.Rounded,
         }.BorderColor(Theme.Accent.ToSpectre()));
-        AnsiConsole.WriteLine();
+        // 不墊尾端空白：唯一呼叫點後接 AnsiConsole.Status() 互動式 spinner，它會自行在上方墊一行，
+        // 否則情境面板與 spinner 之間會出現兩列空白（見 Banner.Compact 的 trailingBlank 說明）。
     }
 
     private static void ShowDiffOverview(CompareSession session)

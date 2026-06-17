@@ -85,10 +85,10 @@ public static class Prompts
         if (below > 0)
             ConsoleUI.Line($"  [{Theme.TextFaint}]▼ 下方還有 {below} 組[/]");
 
-        // 底部顯示游標所在 profile 的說明（若有）。
+        // 底部顯示游標所在 profile 的說明（若有）。整幀最後一列以 LineLast 收尾，避免底列捲動殘影。
         ConsoleUI.Line();
         var desc = profiles[cursor].Description;
-        ConsoleUI.Line(string.IsNullOrWhiteSpace(desc)
+        ConsoleUI.LineLast(string.IsNullOrWhiteSpace(desc)
             ? $"[{Theme.TextFaint}](此 profile 未填說明)[/]"
             : $"[{Theme.TextMuted}]{ConsoleUI.Esc(ConsoleUI.Truncate(desc!, ConsoleUI.Width - 2))}[/]");
         ConsoleUI.EndFrame();

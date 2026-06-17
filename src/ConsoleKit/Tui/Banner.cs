@@ -40,8 +40,13 @@ public sealed class Banner
         AnsiConsole.WriteLine();   // 底部留白
     }
 
-    /// <summary>精簡單行 Banner：給空間有限的畫面（例如資料密集的列表）使用，無大字 Logo。</summary>
-    public void Compact()
+    /// <summary>
+    /// 精簡單行 Banner：給空間有限的畫面（例如資料密集的列表）使用，無大字 Logo。
+    /// <paramref name="trailingBlank"/> 預設輸出尾端一列空白與後續內容隔開；若後續是
+    /// <c>AnsiConsole.Status()</c>／<c>Progress()</c> 這類互動式 Live 元件（它們會在內容上方自行墊一行），
+    /// 請傳 <c>false</c> 以免出現兩列空白。
+    /// </summary>
+    public void Compact(bool trailingBlank = true)
     {
         var name = Markup.Escape(_app.DisplayName);
         var primary = Markup.Escape(_app.PrimaryTagline);
@@ -55,7 +60,7 @@ public sealed class Banner
             Justification = Justify.Left,
             Style = new Style(foreground: Theme.Hairline.ToSpectre()),
         });
-        AnsiConsole.WriteLine();
+        if (trailingBlank) AnsiConsole.WriteLine();
     }
 
     /// <summary>全名副標：大字 Logo 是短版字標，這裡用一行小字補上專案全名與標語，並以髮絲線收尾。</summary>

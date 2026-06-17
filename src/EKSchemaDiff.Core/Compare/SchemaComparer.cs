@@ -175,7 +175,7 @@ public sealed class CompareSession
     /// <summary>
     /// 產生「完整還原腳本」（完整部署腳本的反向）：把來源/目標端點對調後重新比對，
     /// 由官方引擎產生可將目標還原回部署前狀態的腳本。
-    /// <paramref name="excludedObjects"/>（來自 <see cref="CaptureExcludedForReverse"/>）為部署時未納入的物件，
+    /// <paramref name="excludedObjects"/>（來自 <see cref="GetDeployExclusions"/>）為部署時未納入的物件，
     /// 於比對「之前」即排除，使反向比對結果只含已納入物件（預設全部 Included）——
     /// 免去對數百筆差異逐筆 Exclude、每次重算相依的高成本（差異多時可省下數分鐘）。
     /// 重用既有端點（連線字串已建立），不會再次詢問密碼，也不影響正向比對狀態。

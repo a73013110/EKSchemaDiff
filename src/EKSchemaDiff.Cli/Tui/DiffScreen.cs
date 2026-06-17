@@ -136,7 +136,8 @@ public static class DiffScreen
 
         // 下規則線 + 操作提示
         ConsoleUI.Line($"[{Theme.Hairline}]{new string('─', Math.Max(2, w - 1))}[/]");
-        ConsoleUI.Line(
+        // 整幀的最後一列：用 LineLast 收尾（清行尾不換行），鋪滿到 h 列又不觸發底部捲動（見 ConsoleUI.LineLast）。
+        ConsoleUI.LineLast(
             $"[{Theme.TextFaint}]↑↓ 捲動 · PgUp/PgDn 翻頁 · Home/End 首尾 · [/]" +
             $"[bold {Theme.Accent}]f[/] [{Theme.TextFaint}]{(full ? "折疊" : "完整檔案")} · Esc 返回[/]");
 

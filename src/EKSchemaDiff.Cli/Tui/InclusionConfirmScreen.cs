@@ -91,16 +91,17 @@ public static class InclusionConfirmScreen
         int total = pickedCount + depCount;
         ConsoleUI.Line($"勾選 [bold]{pickedCount}[/] 項，為部署安全自動補入相依 " +
                        $"[bold {Theme.Warning}]{depCount}[/] 項，共 [bold]{total}[/] 項");
-        ConsoleUI.Line();
 
-        // 固定開銷：精簡 banner(2)+標題(1)+空白(1)+摘要(1)+空白(1)=6，再留上下捲動提示(2)與安全邊界(1)。
-        int maxRows = Math.Max(1, ConsoleUI.Height - 9);
+        // 固定開銷：精簡 banner(2)+標題(1)+空白(1)+摘要(1)=5，再留上下捲動提示(2)＝7。
+        // 摘要與清單之間不另墊空白——下方 hasUp 佔位列（未捲動時為空行）即為間距，否則會出現兩列空白。
+        // 最後一列以 LineLast 收尾（不換行、不觸發底列捲動），故無需再留安全邊界，整幀可鋪滿 h 列。
+        int maxRows = Math.Max(1, ConsoleUI.Height - 7);
 
         bool hasUp = top > 0;
         bool hasDown = top + maxRows < lines.Count;
         ConsoleUI.Line(hasUp ? $"  [{Theme.TextFaint}]↑ 上面還有 {top} 列[/]" : "");
         for (int i = top; i < Math.Min(lines.Count, top + maxRows); i++) ConsoleUI.Line(lines[i]);
-        ConsoleUI.Line(hasDown ? $"  [{Theme.TextFaint}]↓ 下面還有 {lines.Count - (top + maxRows)} 列[/]" : "");
+        ConsoleUI.LineLast(hasDown ? $"  [{Theme.TextFaint}]↓ 下面還有 {lines.Count - (top + maxRows)} 列[/]" : "");
 
         ConsoleUI.EndFrame();
         return maxRows;

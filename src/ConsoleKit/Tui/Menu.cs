@@ -130,7 +130,8 @@ public static class Menu
         ConsoleUI.Line();
         if (!string.IsNullOrWhiteSpace(desc))
             ConsoleUI.Line($"[{Theme.TextMuted}]{ConsoleUI.Esc(ConsoleUI.Truncate(desc!, w - 2))}[/]");
-        ConsoleUI.Line(footer ?? $"[{Theme.TextFaint}]↑↓ 移動 · Enter 選擇 · Esc 返回[/]");
+        // 整幀最後一列以 LineLast 收尾（清行尾不換行），避免在底列觸發捲動殘影（見 ConsoleUI.LineLast）。
+        ConsoleUI.LineLast(footer ?? $"[{Theme.TextFaint}]↑↓ 移動 · Enter 選擇 · Esc 返回[/]");
         ConsoleUI.EndFrame();
     }
 }
