@@ -116,19 +116,54 @@ public sealed class CompareWorkflow
 
         if (interactive)
         {
-            _log.Step("進入勾選預覽畫面 ReviewScreen");
-            var included = ReviewScreen.Run(session.Differences, profile.ExportOptions.HtmlIgnoreWhitespace, _log, _banner);
-            _log.Step($"離開勾選預覽畫面，結果={(included is null ? "取消" : included.Count + " 項")}");
-            if (included is null)
+            // 勾選 → 解析相依 → 確認頁；確認頁可「返回重勾」（沿用上次勾選），故整段為迴圈。
+            HashSet<ObjectDifference>? lastPicks = null;
+            while (true)
             {
-                AnsiConsole.MarkupLine($"[{Theme.Warning}]已取消，未匯出。[/]");
-                return ExitCode.Ok;
-            }
-            session.ApplyInclusion(included);
-            if (included.Count == 0)
-            {
-                AnsiConsole.MarkupLine($"[{Theme.Warning}]未勾選任何物件，已取消匯出。[/]");
-                return ExitCode.Ok;
+                _log.Step("進入勾選預覽畫面 ReviewScreen");
+                var included = ReviewScreen.Run(
+                    session.Differences, profile.ExportOptions.HtmlIgnoreWhitespace, _log, _banner, lastPicks);
+                _log.Step($"離開勾選預覽畫面，結果={(included is null ? "取消" : included.Count + " 項")}");
+                if (included is null)
+                {
+                    AnsiConsole.MarkupLine($"[{Theme.Warning}]已取消，未匯出。[/]");
+                    return ExitCode.Ok;
+                }
+                if (included.Count == 0)
+                {
+                    AnsiConsole.MarkupLine($"[{Theme.Warning}]未勾選任何物件，已取消匯出。[/]");
+                    return ExitCode.Ok;
+                }
+                lastPicks = included;
+
+                // 解析勾選：算出實際要部署的完整物件集（系統會為部署安全自動補入相依），尚未提交。
+                // 必須以 spinner 回饋，否則畫面會「一片黑」像當掉（ReviewScreen 離開時已 Clear()）。
+                _log.Step($"解析勾選 {included.Count}/{session.Differences.Count} 項（自動補齊相依，差異多時較慢）");
+                AnsiConsole.Clear();
+                _banner.Compact();
+                InclusionResult? resolved = null;
+                AnsiConsole.Status().Spinner(Spinner.Known.Dots)
+                    .Start("正在套用勾選並整理相依物件…（為確保部署能順利執行，系統會自動補齊相依物件，請稍候）",
+                        _ => resolved = session.ResolveInclusion(included));
+                _log.Step($"解析完成：勾選 {resolved!.Picked.Count} 項、相依補入 {resolved.Dependencies.Count} 項、共 {resolved.All.Count} 項");
+
+                // 相依確認頁：讓使用者在匯出前看清補了哪些。
+                var decision = InclusionConfirmScreen.Run(resolved, _banner);
+                if (decision == InclusionDecision.Cancel)
+                {
+                    _log.Step("使用者於確認頁取消匯出");
+                    AnsiConsole.MarkupLine($"[{Theme.Warning}]已取消，未匯出。[/]");
+                    return ExitCode.Ok;
+                }
+                if (decision == InclusionDecision.Back)
+                {
+                    _log.Step("使用者於確認頁返回重新勾選");
+                    continue;   // session 未提交，仍是原始全量差異；帶 lastPicks 回勾選頁
+                }
+
+                session.CommitInclusion(resolved);   // 確認 → 提交，後續匯出以此為準
+                _log.Step("套用勾選完成（已確認）");
+                break;
             }
             // 輸出項目一律沿用設定頁（exportOptions）的設定（不再每次詢問，否則設定形同虛設）。
         }
@@ -175,7 +210,9 @@ public sealed class CompareWorkflow
     }
 
     /// <summary>UI 執行緒讀取用的不可變項目快照（避免與背景匯出執行緒共用可變物件）。</summary>
-    private readonly record struct ItemSnap(string Group, string Label, ExportItemState State, bool Warned);
+    private readonly record struct ItemSnap(
+        string Group, string Label, ExportItemState State, bool Warned, bool IsDependency,
+        DateTime? StartedAtUtc, TimeSpan? Elapsed);
 
     /// <summary>
     /// 在背景執行匯出，前景以自繪畫面顯示進度（含大 Logo），可按 Esc 中斷。
@@ -190,12 +227,14 @@ public sealed class CompareWorkflow
         var snap = new List<ItemSnap>();
         void Report(IReadOnlyList<ExportItem> items)
         {
-            var copy = items.Select(i => new ItemSnap(i.Group, i.Label, i.State, i.Warned)).ToList();
+            var copy = items.Select(i => new ItemSnap(
+                i.Group, i.Label, i.State, i.Warned, i.IsDependency, i.StartedAtUtc, i.Elapsed)).ToList();
             lock (gate) { snap = copy; }
         }
 
         ExportSummary? summary = null;
         Exception? error = null;
+        var wall = System.Diagnostics.Stopwatch.StartNew();
         var task = Task.Run(() =>
         {
             try { summary = Exporter.Export(session, outputDir, DateTime.Now, Report, cts.Token); }
@@ -209,7 +248,9 @@ public sealed class CompareWorkflow
         try
         {
             ConsoleUI.EnterAltScreen();
-            Console.CursorVisible = false;
+            // 隱藏游標 + 停用自動換行：物件名一長（差異多的庫常見），未停用換行時該列會折成兩實體列，
+            // 撐破幀高、使逐格歸位漂移，整個進度畫面捲成空白。必須在 finally 還原。
+            ConsoleUI.EnterRedrawMode();
             int tick = 0;
             while (!task.IsCompleted)
             {
@@ -226,16 +267,48 @@ public sealed class CompareWorkflow
         }
         finally
         {
-            Console.CursorVisible = true;
+            ConsoleUI.ExitRedrawMode();   // 先恢復自動換行，再離開替代螢幕
             ConsoleUI.LeaveAltScreen();
         }
 
         task.Wait();
+        wall.Stop();
         if (error is not null) throw error;
+
+        if (last.Count > 0)
+            LogExportTimings(last, wall.Elapsed, cts.IsCancellationRequested);
 
         if (!cts.IsCancellationRequested && last.Count > 0)
             PrintFinalChecklist(last);
         return (summary, cts.IsCancellationRequested);
+    }
+
+    /// <summary>
+    /// 把每個匯出項目的耗時寫入記錄檔（依群組分段），最後附上總牆鐘時間。
+    /// 供事後追查「哪一項拖慢、整輪花多久」——畫面上的即時計時跑完就消失，這裡才是永久紀錄。
+    /// </summary>
+    private void LogExportTimings(IReadOnlyList<ItemSnap> items, TimeSpan wall, bool cancelled)
+    {
+        _log.Info($"=== 匯出耗時明細{(cancelled ? "（已中斷）" : "")} ===");
+        string? curGroup = null;
+        foreach (var it in items)
+        {
+            if (it.Group != curGroup)
+            {
+                curGroup = it.Group;
+                _log.Info($"[{it.Group}]");
+            }
+            var elapsed = it.Elapsed is { } e ? FormatElapsed(e) : "—";
+            var state = it.State switch
+            {
+                ExportItemState.Done => it.Warned ? "完成(警告)" : "完成",
+                ExportItemState.Skipped => "略過",
+                ExportItemState.Running => "未完成",
+                _ => "未執行",
+            };
+            _log.Info($"  {it.Label}{(it.IsDependency ? " (相依)" : "")}  {state}  {elapsed}");
+        }
+        _log.Info($"匯出總耗時 {FormatElapsed(wall)}");
     }
 
     /// <summary>
@@ -257,13 +330,15 @@ public sealed class CompareWorkflow
                 curGroup = it.Group;
                 AnsiConsole.MarkupLine($"[{Theme.Accent}]▌[/] [bold {Theme.Accent}]{Markup.Escape(it.Group)}[/]");
             }
-            var label = Markup.Escape(it.Label);
+            var label = ConsoleUI.Esc(ConsoleUI.Truncate(it.Label, Math.Max(10, ConsoleUI.Width - 18)));
             var line = it.State switch
             {
                 ExportItemState.Skipped => $"  [{Theme.Warning}]⤼[/] [strikethrough {Theme.TextMuted}]{label}[/] [{Theme.Warning}](略過)[/]",
                 _ when it.Warned => $"  [{Theme.Warning}]✓[/] [strikethrough {Theme.Warning}]{label}[/] [{Theme.Warning}](警告)[/]",
                 _ => $"  [{Theme.Success}]✓[/] [strikethrough {Theme.TextMuted}]{label}[/]",
             };
+            if (it.IsDependency) line += $" [{Theme.TextFaint}]·相依[/]";
+            if (it.Elapsed is { } el) line += $" [{Theme.TextFaint}]({FormatElapsed(el)})[/]";
             AnsiConsole.MarkupLine(line);
         }
         AnsiConsole.WriteLine();
@@ -308,7 +383,8 @@ public sealed class CompareWorkflow
         // 精簡 banner(2) + 標題(1) + 空白(1) + 進度條(1) + 空白(1) = 6 行固定開銷；
         // 再保留中斷提示與一行安全邊界。清單最多用剩下的行數。
         int headerRows = 6 + (cancelling ? 1 : 0) + 1;
-        int maxRows = Math.Max(4, ConsoleUI.Height - headerRows);
+        // 下限取 1（非 4）：避免在極矮視窗用 Math.Max(4,…) 反而把 maxRows 撐到大於剩餘預算、令整幀超出 h-1。
+        int maxRows = Math.Max(1, ConsoleUI.Height - headerRows);
         RenderItemChecklist(items, tick, done, maxRows);
 
         if (cancelling)
@@ -336,7 +412,8 @@ public sealed class CompareWorkflow
         }
 
         // 展平成顯示列（群組標題＋各項目），記錄目前焦點列（處理中；無則第一個未處理）。
-        var lines = new List<string>();
+        // 每列同時帶「可見寬度」與「右側耗時字串」，供 emit 時把計時右對齊到視窗右緣。
+        var rows = new List<(string Markup, int PlainWidth, string? Time)>();
         int focus = -1;
         string? curGroup = null;
         string spin = SpinnerFrames[tick % SpinnerFrames.Length];
@@ -345,52 +422,98 @@ public sealed class CompareWorkflow
             if (it.Group != curGroup)
             {
                 curGroup = it.Group;
-                lines.Add($"[{Theme.Accent}]▌[/] [bold {Theme.Accent}]{Markup.Escape(it.Group)}[/] " +
-                          $"[{Theme.TextFaint}]({groupDone.GetValueOrDefault(it.Group)}/{groupTotal[it.Group]})[/]");
+                rows.Add(($"[{Theme.Accent}]▌[/] [bold {Theme.Accent}]{Markup.Escape(it.Group)}[/] " +
+                          $"[{Theme.TextFaint}]({groupDone.GetValueOrDefault(it.Group)}/{groupTotal[it.Group]})[/]", 0, null));
             }
 
-            var label = Markup.Escape(it.Label);
-            string line = it.State switch
+            // 預留右側計時欄（約 8 欄）：標籤上限較一般窄，避免長物件名把計時擠出畫面。
+            var plainLabel = ConsoleUI.Truncate(it.Label, Math.Max(10, ConsoleUI.Width - 18));
+            var label = ConsoleUI.Esc(plainLabel);
+            string markup;
+            string plainSuffix;
+            switch (it.State)
             {
-                ExportItemState.Done when it.Warned => $"  [{Theme.Warning}]✓[/] [strikethrough {Theme.Warning}]{label}[/] [{Theme.Warning}](警告)[/]",
-                ExportItemState.Done => $"  [{Theme.Success}]✓[/] [strikethrough {Theme.TextMuted}]{label}[/]",
-                ExportItemState.Skipped => $"  [{Theme.Warning}]⤼[/] [strikethrough {Theme.TextMuted}]{label}[/] [{Theme.Warning}](略過)[/]",
-                ExportItemState.Running => $"  [{Theme.Accent}]{spin}[/] [bold]{label}[/]",
-                _ => $"  [{Theme.TextFaint}]○ {label}[/]",
-            };
-            if (it.State == ExportItemState.Running && focus < 0) focus = lines.Count;
-            lines.Add(line);
+                case ExportItemState.Done when it.Warned:
+                    markup = $"  [{Theme.Warning}]✓[/] [strikethrough {Theme.Warning}]{label}[/] [{Theme.Warning}](警告)[/]";
+                    plainSuffix = " (警告)"; break;
+                case ExportItemState.Done:
+                    markup = $"  [{Theme.Success}]✓[/] [strikethrough {Theme.TextMuted}]{label}[/]";
+                    plainSuffix = ""; break;
+                case ExportItemState.Skipped:
+                    markup = $"  [{Theme.Warning}]⤼[/] [strikethrough {Theme.TextMuted}]{label}[/] [{Theme.Warning}](略過)[/]";
+                    plainSuffix = " (略過)"; break;
+                case ExportItemState.Running:
+                    markup = $"  [{Theme.Accent}]{spin}[/] [bold]{label}[/]";
+                    plainSuffix = ""; break;
+                default:
+                    markup = $"  [{Theme.TextFaint}]○ {label}[/]";
+                    plainSuffix = ""; break;
+            }
+            // 相依自動補入（非勾選）的項目加標記，方便辨識。
+            if (it.IsDependency)
+            {
+                markup += $" [{Theme.TextFaint}]·相依[/]";
+                plainSuffix += " ·相依";
+            }
+            // 可見寬度＝縮排(2)＋圖示與空白(2)＋標籤＋後綴。
+            int plainW = 4 + ConsoleUI.DisplayWidth(plainLabel) + ConsoleUI.DisplayWidth(plainSuffix);
+            if (it.State == ExportItemState.Running && focus < 0) focus = rows.Count;
+            rows.Add((markup, plainW, ItemTime(it)));
         }
         if (focus < 0)
         {
             // 沒有處理中項目：完成時聚焦尾端，否則聚焦第一個未處理者附近。
-            focus = done ? lines.Count - 1 : 0;
+            focus = done ? rows.Count - 1 : 0;
+        }
+
+        // 把一列輸出：有計時則右對齊到視窗右緣（總寬固定，右緣不抖動）。
+        void Emit((string Markup, int PlainWidth, string? Time) r)
+        {
+            if (r.Time is null) { ConsoleUI.Line(r.Markup); return; }
+            int pad = ConsoleUI.Width - r.PlainWidth - ConsoleUI.DisplayWidth(r.Time) - 1;
+            if (pad < 1) pad = 1;
+            ConsoleUI.Line($"{r.Markup}{new string(' ', pad)}[{Theme.TextFaint}]{r.Time}[/]");
         }
 
         // 全部塞得下：直接畫，最多 maxRows 列。
-        if (lines.Count <= maxRows)
+        if (rows.Count <= maxRows)
         {
-            for (int i = 0; i < lines.Count; i++) ConsoleUI.Line(lines[i]);
+            for (int i = 0; i < rows.Count; i++) Emit(rows[i]);
             return;
         }
 
         // 放不下：以 focus 為中心開窗，前後各保留一列「…」省略提示（也計入 maxRows）。
         // 先假設上下都有省略列（各佔 1），求出窗內可畫的項目列數，再依實際是否觸頂/觸底回收省略列。
         int windowRows = Math.Max(1, maxRows - 2);
-        int start = Math.Clamp(focus - windowRows / 2, 0, lines.Count - windowRows);
+        int start = Math.Clamp(focus - windowRows / 2, 0, rows.Count - windowRows);
         bool hasTop = start > 0;
-        bool hasBottom = start + windowRows < lines.Count;
+        bool hasBottom = start + windowRows < rows.Count;
         // 觸頂或觸底時該側不需省略列，把那一列還給窗內項目。
         windowRows = maxRows - (hasTop ? 1 : 0) - (hasBottom ? 1 : 0);
-        start = Math.Clamp(focus - windowRows / 2, 0, lines.Count - windowRows);
+        start = Math.Clamp(focus - windowRows / 2, 0, rows.Count - windowRows);
         hasTop = start > 0;
-        hasBottom = start + windowRows < lines.Count;
+        hasBottom = start + windowRows < rows.Count;
         int end = start + windowRows;
 
         if (hasTop) ConsoleUI.Line($"  [{Theme.TextFaint}]…（前 {start} 列略）[/]");
-        for (int i = start; i < end; i++) ConsoleUI.Line(lines[i]);
-        if (hasBottom) ConsoleUI.Line($"  [{Theme.TextFaint}]…（後 {lines.Count - end} 列略）[/]");
+        for (int i = start; i < end; i++) Emit(rows[i]);
+        if (hasBottom) ConsoleUI.Line($"  [{Theme.TextFaint}]…（後 {rows.Count - end} 列略）[/]");
     }
+
+    /// <summary>本項目右側要顯示的耗時字串：執行中由起算時刻即時推算（會隨幀增加），完成則為凍結耗時；尚未開始為 null。</summary>
+    private static string? ItemTime(ItemSnap it)
+    {
+        if (it.State == ExportItemState.Running && it.StartedAtUtc is { } s)
+        {
+            var e = DateTime.UtcNow - s;
+            return FormatElapsed(e < TimeSpan.Zero ? TimeSpan.Zero : e);
+        }
+        return it.Elapsed is { } el ? FormatElapsed(el) : null;
+    }
+
+    /// <summary>耗時格式：未滿一分鐘顯示「12.3s」，超過顯示「1m05s」。</summary>
+    private static string FormatElapsed(TimeSpan t) =>
+        t.TotalSeconds < 60 ? $"{t.TotalSeconds:0.0}s" : $"{(int)t.TotalMinutes}m{t.Seconds:00}s";
 
     private static void ShowProfileSummary(Profile profile)
     {

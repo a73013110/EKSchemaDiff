@@ -1,5 +1,5 @@
+using ConsoleKit.Text;
 using EKSchemaDiff.Core.Compare;
-using EKSchemaDiff.Report;
 using Spectre.Console;
 
 namespace EKSchemaDiff.Cli.Tui;
@@ -10,7 +10,8 @@ namespace EKSchemaDiff.Cli.Tui;
 /// </summary>
 public static class ReviewScreen
 {
-    public static HashSet<ObjectDifference>? Run(IReadOnlyList<ObjectDifference> diffs, bool ignoreWhitespace, IAppLog log, Banner banner)
+    public static HashSet<ObjectDifference>? Run(IReadOnlyList<ObjectDifference> diffs, bool ignoreWhitespace, IAppLog log, Banner banner,
+        ISet<ObjectDifference>? preselected = null)
     {
         var ordered = diffs
             .OrderBy(d => d.Kind switch
@@ -21,8 +22,10 @@ public static class ReviewScreen
             .ThenBy(d => d.Name)
             .ToList();
 
+        // 初始勾選：自「確認頁」返回時沿用上次勾選，否則用差異本身的納入狀態。
         var included = new bool[ordered.Count];
-        for (int i = 0; i < ordered.Count; i++) included[i] = ordered[i].Included;
+        for (int i = 0; i < ordered.Count; i++)
+            included[i] = preselected is not null ? preselected.Contains(ordered[i]) : ordered[i].Included;
 
         // 後援：非互動環境改用 Spectre 標準多選（無即時預覽）。
         if (!ConsoleUI.Interactive)
@@ -33,7 +36,7 @@ public static class ReviewScreen
         AnsiConsole.Clear();
         try
         {
-            Console.CursorVisible = false;
+            ConsoleUI.EnterRedrawMode();
             while (true)
             {
                 try
@@ -69,9 +72,10 @@ public static class ReviewScreen
                         for (int i = 0; i < included.Length; i++) included[i] = false;
                         break;
                     case ConsoleKey.RightArrow:
-                        // 展開游標物件的全螢幕差異詳檢（可捲動、可切換完整檔案）；返回後恢復隱藏游標。
+                        // 展開游標物件的全螢幕差異詳檢（可捲動、可切換完整檔案）；
+                        // 子畫面離開時會還原游標與自動換行，返回後需重新確立逐格重繪模式。
                         DiffScreen.Show(ordered[cursor], ignoreWhitespace, log);
-                        Console.CursorVisible = false;
+                        ConsoleUI.EnterRedrawMode();
                         break;
                     case ConsoleKey.Enter:
                         var picked = Collect(ordered, included);
@@ -86,7 +90,7 @@ public static class ReviewScreen
         }
         finally
         {
-            Console.CursorVisible = true;
+            ConsoleUI.ExitRedrawMode();
         }
     }
 

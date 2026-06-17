@@ -9,9 +9,13 @@ public sealed class ExportOptions
     [JsonPropertyName("fullScript")]
     public bool FullScript { get; set; } = true;
 
-    /// <summary>是否輸出依相依順序編號的逐物件部署檔。</summary>
+    /// <summary>
+    /// 是否輸出依相依順序編號的逐物件部署檔。
+    /// 預設關閉：逐物件每件須單獨 GenerateScript（樞紐物件因相依刷新可達一分鐘／件），常態匯出毋須，
+    /// 需要逐檔時再於設定開啟。
+    /// </summary>
     [JsonPropertyName("perObjectScripts")]
-    public bool PerObjectScripts { get; set; } = true;
+    public bool PerObjectScripts { get; set; } = false;
 
     /// <summary>
     /// 是否輸出「完整還原腳本」（完整部署腳本的反向）：把來源/目標對調產生，

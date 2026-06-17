@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using ConsoleKit.Text;
 
 namespace EKSchemaDiff.Report;
 
@@ -13,6 +14,9 @@ public sealed class ReportIndexRow
     public string Status { get; init; } = "";
     public int DifferenceRows { get; init; }
     public string ReportFile { get; init; } = "";
+
+    /// <summary>此物件是否為「相依自動補入」（非使用者勾選）。</summary>
+    public bool IsDependency { get; init; }
 }
 
 /// <summary>
@@ -83,13 +87,15 @@ public static class HtmlReportBuilder
         var stamp = generatedAt.ToString("yyyy/MM/dd HH:mm:ss");
         int totalCount = rows.Count;
         int changedCount = rows.Count(r => r.Status != "無內容差異");
+        int dependencyCount = rows.Count(r => r.IsDependency);
         int differenceRowCount = rows.Sum(r => r.DifferenceRows);
 
         var indexRows = new StringBuilder();
         foreach (var r in rows)
         {
             var statusClass = r.Status == "有差異" ? "changed" : (r.Status == "無內容差異" ? "same" : "notice");
-            indexRows.Append($"<tr><td class=\"seq\">{Enc(r.Sequence)}</td><td>{Enc(r.Action)}</td><td>{Enc(r.ObjectType)}</td><td class=\"object\">{Enc(r.ObjectName)}</td><td><span class=\"status {statusClass}\">{Enc(r.Status)}</span></td><td class=\"count\">{r.DifferenceRows}</td><td><a href=\"{Enc(r.ReportFile)}\">檢視</a></td></tr>\r\n");
+            var source = r.IsDependency ? "<span class=\"status notice\">相依</span>" : "勾選";
+            indexRows.Append($"<tr><td class=\"seq\">{Enc(r.Sequence)}</td><td>{Enc(r.Action)}</td><td>{Enc(r.ObjectType)}</td><td class=\"object\">{Enc(r.ObjectName)}</td><td>{source}</td><td><span class=\"status {statusClass}\">{Enc(r.Status)}</span></td><td class=\"count\">{r.DifferenceRows}</td><td><a href=\"{Enc(r.ReportFile)}\">檢視</a></td></tr>\r\n");
         }
 
         var warningHtml = "";
@@ -103,6 +109,7 @@ public static class HtmlReportBuilder
             .Replace("__PROFILE__", Enc(profileName))
             .Replace("__TOTAL__", totalCount.ToString())
             .Replace("__CHANGED__", changedCount.ToString())
+            .Replace("__DEPS__", dependencyCount.ToString())
             .Replace("__DIFFROWS__", differenceRowCount.ToString())
             .Replace("__STAMP__", stamp)
             .Replace("__INDEXROWS__", indexRows.ToString().TrimEnd())
@@ -138,8 +145,8 @@ __ROWS__
 <!DOCTYPE html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SQL 比對總覽</title>
 <style>:root{--bg:#fffaf2;--surface:#fffdf9;--surface2:#f8f0e5;--line:#e5d8c8;--line2:#d3c0aa;--muted:#6b5848;--text:#35271d;--primary:#92400e;--tint:#fff0d6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif;font-size:16px;line-height:1.6;font-variant-numeric:tabular-nums}.mast{display:grid;grid-template-columns:1fr repeat(3,180px);border-bottom:1px solid var(--line2);background:var(--surface)}.title{padding:36px}.title p{margin:0 0 10px;color:var(--primary);font-size:14px;font-weight:700;letter-spacing:.08em}.title h1{margin:0;font-size:clamp(32px,4vw,56px);font-weight:700;line-height:1.15}.metric{display:flex;flex-direction:column;justify-content:space-between;padding:24px;border-left:1px solid var(--line2);background:var(--surface2)}.metric strong{color:var(--primary);font-size:56px;line-height:1;font-weight:700}.metric span{color:var(--muted);font-size:14px;font-weight:700}.sub{display:flex;justify-content:space-between;padding:13px 22px;border-bottom:1px solid var(--line2);background:var(--surface2);color:var(--muted);font-size:14px}.wrap{overflow:auto}table{width:100%;min-width:980px;border-collapse:collapse;background:var(--surface)}th,td{padding:15px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:left;font-size:15px}th{background:#5b3a26;color:#fffdf9;font-size:14px}tbody tr:hover{background:#fff5e7}.count{color:var(--primary);font-size:20px;font-weight:700}.object{color:#4b3829;font:14px/1.6 Consolas,"Courier New",monospace}a{color:var(--primary);font-weight:700;text-decoration-thickness:2px;text-underline-offset:4px;cursor:pointer}a:focus-visible{outline:3px solid #d69b52;outline-offset:3px}.status{display:inline-block;padding:5px 9px;border:1px solid var(--line2);color:var(--muted);font-size:14px;font-weight:700}.status.changed,.status.notice{border-color:#d69b52;color:var(--primary);background:var(--tint)}h2,ul{margin-right:24px;margin-left:24px}@media(max-width:900px){body{font-size:16px}.mast{grid-template-columns:1fr}.metric{min-height:115px;border-top:1px solid var(--line2);border-left:0}.sub{gap:8px;flex-direction:column}th,td{font-size:15px}}</style>
-</head><body><header class="mast"><section class="title"><p>SQL 發版檢核 · __PROFILE__</p><h1>比對總覽</h1></section><section class="metric"><strong>__TOTAL__</strong><span>物件</span></section><section class="metric hot"><strong>__CHANGED__</strong><span>有異動</span></section><section class="metric hot"><strong>__DIFFROWS__</strong><span>差異列數</span></section></header><div class="sub"><span>左側更版／右側原版</span><span>產生時間：__STAMP__</span></div>
-<div class="wrap"><table><thead><tr><th>順序</th><th>動作</th><th>類型</th><th>物件</th><th>狀態</th><th>差異列數</th><th>報告</th></tr></thead><tbody>__INDEXROWS__</tbody></table></div>
+</head><body><header class="mast"><section class="title"><p>SQL 發版檢核 · __PROFILE__</p><h1>比對總覽</h1></section><section class="metric"><strong>__TOTAL__</strong><span>物件</span></section><section class="metric hot"><strong>__CHANGED__</strong><span>有異動</span></section><section class="metric"><strong>__DEPS__</strong><span>相依補入</span></section><section class="metric hot"><strong>__DIFFROWS__</strong><span>差異列數</span></section></header><div class="sub"><span>左側更版／右側原版</span><span>產生時間：__STAMP__</span></div>
+<div class="wrap"><table><thead><tr><th>順序</th><th>動作</th><th>類型</th><th>物件</th><th>來源</th><th>狀態</th><th>差異列數</th><th>報告</th></tr></thead><tbody>__INDEXROWS__</tbody></table></div>
 __WARNINGS__
 </body></html>
 """;
