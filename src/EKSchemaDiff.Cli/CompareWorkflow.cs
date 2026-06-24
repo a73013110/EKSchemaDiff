@@ -122,7 +122,7 @@ public sealed class CompareWorkflow
             {
                 _log.Step("進入勾選預覽畫面 ReviewScreen");
                 var included = ReviewScreen.Run(
-                    session.Differences, profile.ExportOptions.HtmlIgnoreWhitespace, _log, _banner, lastPicks);
+                    session.Differences, profile.ExportOptions.HtmlReport.IgnoreWhitespace, _log, _banner, lastPicks);
                 _log.Step($"離開勾選預覽畫面，結果={(included is null ? "取消" : included.Count + " 項")}");
                 if (included is null)
                 {
@@ -525,15 +525,15 @@ public sealed class CompareWorkflow
         grid.AddRow($"[{Theme.TextMuted}]來源（更版）[/]", Markup.Escape(profile.Source.ToSafeDisplay()));
         grid.AddRow($"[{Theme.TextMuted}]目標（原版）[/]", Markup.Escape(profile.Target.ToSafeDisplay()));
         var deployDb = profile.ResolveDeployDatabaseName();
-        var deployDbNote = string.IsNullOrWhiteSpace(profile.ExportOptions.DeployDatabaseName)
+        var deployDbNote = string.IsNullOrWhiteSpace(profile.ExportOptions.DeploySql.DeployDatabaseName)
             ? $"[{Theme.TextMuted}](沿用目標庫名)[/]" : $"[{Theme.Warning}](已覆寫)[/]";
         grid.AddRow($"[{Theme.TextMuted}]部署 USE 資料庫[/]", $"[bold]{Markup.Escape(deployDb)}[/] {deployDbNote}");
-        grid.AddRow($"[{Theme.TextMuted}]忽略權限[/]", co.IgnorePermissions
+        grid.AddRow($"[{Theme.TextMuted}]忽略權限[/]", co.Safety.IgnorePermissions
             ? $"[{Theme.Success}]是（不動 GRANT/DENY/REVOKE）[/]"
             : $"[{Theme.Danger}]否（注意誤刪權限風險）[/]");
-        grid.AddRow($"[{Theme.TextMuted}]刪除目標多出物件[/]", co.DropObjectsNotInSource ? $"[{Theme.Danger}]是[/]" : $"[{Theme.Success}]否[/]");
-        grid.AddRow($"[{Theme.TextMuted}]資料遺失阻擋[/]", co.BlockOnPossibleDataLoss ? $"[{Theme.Success}]是[/]" : $"[{Theme.Warning}]否[/]");
-        grid.AddRow($"[{Theme.TextMuted}]比對描述(MS_Description)[/]", co.IgnoreExtendedProperties ? $"[{Theme.Warning}]否[/]" : $"[{Theme.Success}]是[/]");
+        grid.AddRow($"[{Theme.TextMuted}]刪除目標多出物件[/]", co.Safety.DropObjectsNotInSource ? $"[{Theme.Danger}]是[/]" : $"[{Theme.Success}]否[/]");
+        grid.AddRow($"[{Theme.TextMuted}]資料遺失阻擋[/]", co.Safety.BlockOnPossibleDataLoss ? $"[{Theme.Success}]是[/]" : $"[{Theme.Warning}]否[/]");
+        grid.AddRow($"[{Theme.TextMuted}]比對描述(MS_Description)[/]", co.Comparison.IgnoreExtendedProperties ? $"[{Theme.Warning}]否[/]" : $"[{Theme.Success}]是[/]");
         grid.AddRow($"[{Theme.TextMuted}]輸出項目[/]", $"[{Theme.Warning}]{Markup.Escape(profile.ExportOptions.Describe())}[/]");
         AnsiConsole.Write(new Panel(grid)
         {

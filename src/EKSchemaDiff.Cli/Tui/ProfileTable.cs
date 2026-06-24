@@ -22,7 +22,7 @@ public static class ProfileTable
                 isDefault ? $"[bold]{Markup.Escape(p.Name)}[/] [{Theme.TextMuted}](預設)[/]" : Markup.Escape(p.Name),
                 Markup.Escape(p.Source.ToSafeDisplay()),
                 Markup.Escape(p.Target.ToSafeDisplay()),
-                p.CompareOptions.IgnorePermissions ? $"[{Theme.Success}]是[/]" : $"[{Theme.Danger}]否[/]",
+                p.CompareOptions.Safety.IgnorePermissions ? $"[{Theme.Success}]是[/]" : $"[{Theme.Danger}]否[/]",
                 Markup.Escape(p.ExportOptions.Describe()));
         }
         return table;

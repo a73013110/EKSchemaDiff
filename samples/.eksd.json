@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "defaultProfile": "uat2prod",
   "profiles": [
     {
@@ -21,23 +21,41 @@
       },
       "outputDir": "比對結果",
       "compareOptions": {
-        "ignorePermissions": true,
-        "dropPermissionsNotInSource": false,
-        "ignoreRoleMembership": true,
-        "ignoreLoginSids": true,
-        "ignoreExtendedProperties": false,
-        "blockOnPossibleDataLoss": true,
-        "dropObjectsNotInSource": false,
-        "ignoreWhitespace": true,
-        "ignoreKeywordCasing": true,
-        "excludedObjectTypes": ["Permissions", "Users", "Logins", "RoleMembership", "Credentials"]
+        "safety": {
+          "ignorePermissions": true,
+          "dropPermissionsNotInSource": false,
+          "dropObjectsNotInSource": false,
+          "blockOnPossibleDataLoss": true
+        },
+        "comparison": {
+          "ignoreRoleMembership": true,
+          "ignoreLoginSids": true,
+          "ignoreExtendedProperties": false,
+          "ignoreWhitespace": true,
+          "ignoreKeywordCasing": true,
+          "ignoreColumnOrder": false
+        },
+        "excludedObjectTypes": [
+          "Permissions",
+          "Users",
+          "Logins",
+          "RoleMembership",
+          "Credentials",
+          "DatabaseRoles",
+          "ApplicationRoles"
+        ]
       },
       "exportOptions": {
-        "fullScript": true,
-        "perObjectScripts": true,
-        "fullRollbackScript": false,
-        "exportHtml": true,
-        "htmlIgnoreWhitespace": false
+        "deploySql": {
+          "fullScript": true,
+          "fullRollbackScript": false,
+          "perObjectScripts": true,
+          "deployDatabaseName": null
+        },
+        "htmlReport": {
+          "enabled": true,
+          "ignoreWhitespace": false
+        }
       }
     },
     {
@@ -63,16 +81,41 @@
       },
       "outputDir": "比對結果",
       "compareOptions": {
-        "ignorePermissions": true,
-        "excludedObjectTypes": ["Permissions", "Users", "Logins", "RoleMembership", "Credentials"]
+        "safety": {
+          "ignorePermissions": true,
+          "dropPermissionsNotInSource": false,
+          "dropObjectsNotInSource": false,
+          "blockOnPossibleDataLoss": true
+        },
+        "comparison": {
+          "ignoreRoleMembership": true,
+          "ignoreLoginSids": true,
+          "ignoreExtendedProperties": false,
+          "ignoreWhitespace": true,
+          "ignoreKeywordCasing": true,
+          "ignoreColumnOrder": false
+        },
+        "excludedObjectTypes": [
+          "Permissions",
+          "Users",
+          "Logins",
+          "RoleMembership",
+          "Credentials",
+          "DatabaseRoles",
+          "ApplicationRoles"
+        ]
       },
       "exportOptions": {
-        "fullScript": true,
-        "perObjectScripts": true,
-        "fullRollbackScript": false,
-        "exportHtml": true,
-        "deployDatabaseName": null,
-        "htmlIgnoreWhitespace": false
+        "deploySql": {
+          "fullScript": true,
+          "fullRollbackScript": false,
+          "perObjectScripts": true,
+          "deployDatabaseName": null
+        },
+        "htmlReport": {
+          "enabled": true,
+          "ignoreWhitespace": false
+        }
       }
     }
   ]

@@ -113,18 +113,7 @@ public sealed class CompareSession
         // 此時模型仍含全部差異節點，DacFx 會為「真正硬相依」（部署勾選物件所必需）自動保留 Included、
         // 不致漏掉部署必要物件；排除可能觸發連鎖回補，故反覆收斂直到穩定（上限數圈，避免極端情況空轉）。
         var wrapped = result.Differences.Select(d => new ObjectDifference(d)).ToList();
-        for (int pass = 0; pass < 4; pass++)
-        {
-            bool changed = false;
-            foreach (var od in wrapped)
-            {
-                if (od.Included && !keepNames.Contains(od.Name))
-                {
-                    try { result.Exclude(od.Inner); changed = true; } catch { /* 硬相依：無法排除→保留 */ }
-                }
-            }
-            if (!changed) break;
-        }
+        Converge(result, wrapped, keepNames);
 
         // 依「收斂後的實際 Included」重建部署排除清單，供還原腳本／逐物件平行重用，
         // 確保它們的範圍與部署一致（不會把剛收掉的物件又拉回來）。
@@ -156,13 +145,18 @@ public sealed class CompareSession
     public bool WasPicked(ObjectDifference d) => _pickedNames is null || _pickedNames.Contains(d.Name);
 
     /// <summary>
-    /// 取得「部署排除清單」（未納入部署的物件識別），供還原腳本與逐物件平行各自重比時於比對前排除。
+    /// 取得「部署排除清單」（未納入部署的物件識別），供 ResolveInclusion 重比失敗的 fallback 重推。
     /// ApplyInclusion 重比後直接重用其記錄；未經 ApplyInclusion 時，依目前差異的納入狀態即時推導。
     /// </summary>
     public IReadOnlyList<SchemaComparisonExcludedObjectId> GetDeployExclusions()
         => _deployExclusions ?? BuildExclusionsExcept(
                _differences.Where(d => d.Included).Select(d => d.Name)
                    .ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>實際納入部署的物件名稱集合（即完整部署腳本會動到的物件），供還原腳本嚴格鎖定範圍。須在主執行緒讀取。</summary>
+    public IReadOnlySet<string> GetDeployObjectNames()
+        => _differences.Where(d => d.Included).Select(d => d.Name)
+               .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>產生部署 SQL（僅含已納入的差異，依相依順序）。</summary>
     public string GenerateScript()
@@ -174,21 +168,47 @@ public sealed class CompareSession
 
     /// <summary>
     /// 產生「完整還原腳本」（完整部署腳本的反向）：把來源/目標端點對調後重新比對，
-    /// 由官方引擎產生可將目標還原回部署前狀態的腳本。
-    /// <paramref name="excludedObjects"/>（來自 <see cref="GetDeployExclusions"/>）為部署時未納入的物件，
-    /// 於比對「之前」即排除，使反向比對結果只含已納入物件（預設全部 Included）——
-    /// 免去對數百筆差異逐筆 Exclude、每次重算相依的高成本（差異多時可省下數分鐘）。
+    /// 由官方引擎產生可將目標還原回部署前狀態的腳本。<paramref name="deployObjectNames"/> 為實際納入部署的
+    /// 物件名稱（<see cref="GetDeployObjectNames"/>），還原嚴格鎖定在這一組。重用既有端點（連線字串已建立），
+    /// 不會再次詢問密碼，也不影響正向比對狀態。
+    ///
+    /// 兩個必須處理的反向特性（皆為實測 VS 對照後修正）：
+    /// 1. <b>還原本質是「反做部署」</b>：部署新建（Add）的物件，還原要 DROP 回去。但安全選項
+    ///    <c>DropObjectsNotInSource=false</c> 會壓掉「目標有、來源無」的卸除，使還原漏掉所有「部署新建物件」的
+    ///    DROP（還原不完整）。故還原比對「在已鎖定範圍內」改開啟整個 Drop 家族，讓反向能產出必要的 DROP。
+    /// 2. <b>範圍洩漏</b>：反向是獨立的一次比對，會浮現一些「只在反向方向才出現、與部署無關」的差異
+    ///    （如不相關 view 的 MS_DiagramPane 設計器擴充屬性）。舊作法用「正向」差異建排除清單，蓋不到這些
+    ///    只在反向浮現者 → 洩漏。故改用反向比對「自己」的差異建排除清單。
+    ///
+    /// 範圍鎖定用「比對前排除＋比對後收斂」雙層（與正向 <see cref="ResolveInclusion"/> 同套路，單次比對）：
+    /// <list type="bullet">
+    /// <item><b>比對前排除</b> <paramref name="forwardExclusions"/>（正向已知的非部署物件，含其約束等子元素）：把它們逐出模型，
+    /// 使全域作用的 Drop 子選項（DropConstraintsNotInSource 等）波及不到 → 避免 SA_ABS 式的約束洩漏。</item>
+    /// <item><b>比對後收斂</b>：對「仍 Included 但不在 <paramref name="deployObjectNames"/>」者逐筆 <c>result.Exclude</c>。
+    /// 這類多為「只在反向浮現、無法用物件識別於比對前排除」的擴充屬性差異（如不相關 view 的 MS_DiagramPane 設計器中繼資料）——
+    /// 唯有比對後 Exclude 壓得住（比對前排除對它們無效）。</item>
+    /// </list>
     /// 重用既有端點（連線字串已建立），不會再次詢問密碼，也不影響正向比對狀態。
     /// </summary>
-    public string GenerateReverseScript(IReadOnlyList<SchemaComparisonExcludedObjectId> excludedObjects)
+    public string GenerateReverseScript(
+        IReadOnlyList<SchemaComparisonExcludedObjectId> forwardExclusions, IReadOnlySet<string> deployObjectNames)
     {
         // 端點對調：原目標當來源、原來源當目標 → 產生「把新結構改回舊結構」的腳本。
         var reverse = new SchemaComparison(_comparison.Target, _comparison.Source);
         Profile.CompareOptions.ApplyTo(reverse.Options, new List<string>());
 
-        // 比對前排除未納入物件：兩端皆加入排除清單（依物件識別，不存在於某端則無作用）。
-        // 如此 reverse.Compare() 直接只回已納入物件的差異，無需任何事後 Include/Exclude。
-        foreach (var ex in excludedObjects)
+        // 還原＝反做部署：部署 Add 的物件還原要 DROP；安全選項 DropObjectsNotInSource=false（連同綁定的 Drop 家族）
+        // 會壓掉這些 DROP，使還原漏掉所有「部署新建物件」的卸除。故還原比對開啟整個 Drop 家族補回——
+        // 範圍由下方兩層排除鎖死在部署集，不致誤動其他物件。
+        reverse.Options.DropObjectsNotInSource = true;
+        reverse.Options.DropConstraintsNotInSource = true;
+        reverse.Options.DropIndexesNotInSource = true;
+        reverse.Options.DropDmlTriggersNotInSource = true;
+        reverse.Options.DropStatisticsNotInSource = true;
+        reverse.Options.DropExtendedPropertiesNotInSource = true;
+
+        // 第一層：比對前排除正向已知的非部署物件（逐出模型，堵住全域 Drop 子選項）。
+        foreach (var ex in forwardExclusions)
         {
             reverse.ExcludedSourceObjects.Add(ex);
             reverse.ExcludedTargetObjects.Add(ex);
@@ -196,6 +216,10 @@ public sealed class CompareSession
 
         var result = reverse.Compare();
         if (!result.IsValid) return string.Empty;
+
+        // 第二層：比對後收斂，壓住比對前排除蓋不到的反向擴充屬性洩漏。
+        var wrapped = result.Differences.Select(d => new ObjectDifference(d)).ToList();
+        Converge(result, wrapped, deployObjectNames);
 
         // 還原腳本一樣在目標（客戶）資料庫上執行，故沿用相同的部署庫名。
         return result.GenerateScript(Profile.ResolveDeployDatabaseName()).Script ?? string.Empty;
@@ -230,20 +254,48 @@ public sealed class CompareSession
     }
 
     /// <summary>
-    /// 平行逐物件用：建立獨立的正向比對工作階段（重連資料庫重新比對），但比對前即套用 <paramref name="exclusions"/>，
-    /// 使結果只含目標物件、可在自己的執行緒上廉價地 isolate + <see cref="GenerateObjectScript"/>。
-    /// 與本階段及其他 worker 各持獨立的 SchemaComparison/Result，互不干擾。
-    /// 重用既有端點（連線字串已建立），不會再次詢問密碼。可在背景執行緒呼叫。
+    /// 比對後收斂：對「仍 Included 但不在 <paramref name="keep"/> 集」的差異逐筆 <c>result.Exclude</c>，
+    /// 反覆直到穩定（上限數圈，避免極端情況空轉）。排除可能觸發 DacFx 連鎖回補，故需多圈。
+    /// 此模型仍含全部差異節點，DacFx 會為「真正硬相依」自動保留 Included、不致漏掉必要物件。
+    /// 硬相依項的 <c>Exclude</c> 會丟例外（無法排除）——記入 <c>failed</c> 後續圈即跳過，
+    /// 避免每圈對它重算整張相依圖卻只是再丟一次例外的白工（這是踩過的成本鐵律）。
+    /// 此方法只調整納入狀態、不改變最終會產出的物件集合，故對 VS 等價性無影響。
     /// </summary>
-    public CompareSession CreateScopedForwardSession(IReadOnlyList<SchemaComparisonExcludedObjectId> exclusions)
+    private static void Converge(
+        SchemaComparisonResult result, IReadOnlyList<ObjectDifference> wrapped, IReadOnlySet<string> keep)
+    {
+        var failed = new HashSet<SchemaDifference>();
+        for (int pass = 0; pass < 4; pass++)
+        {
+            bool changed = false;
+            foreach (var od in wrapped)
+            {
+                if (od.Included && !keep.Contains(od.Name) && !failed.Contains(od.Inner))
+                {
+                    try { result.Exclude(od.Inner); changed = true; }
+                    catch { failed.Add(od.Inner); /* 硬相依：無法排除→保留，且後續圈跳過 */ }
+                }
+            }
+            if (!changed) break;
+        }
+    }
+
+    /// <summary>
+    /// 平行逐物件用：建立獨立的「完整」正向比對工作階段（重連資料庫、重新比對全部物件）。
+    /// 與本階段及其他 worker 各持獨立的 SchemaComparison/Result，互不干擾，可在背景執行緒呼叫。
+    /// 重用既有端點（連線字串已建立），不會再次詢問密碼。
+    ///
+    /// 刻意「不」於比對前以 ExcludedSourceObjects 縮小模型：舊作法會把「被勾選 ADD 物件所相依、但未被勾選」
+    /// 的物件一併從來源模型移除，導致該 ADD 物件在比對結果中消失（map 找不到名稱）、逐物件腳本被誤判
+    /// 「無法產生」而 0.0s 略過。改持完整模型後，每個被勾選物件都必然存在、相依皆可解析；要產生單物件腳本時
+    /// 再以 <see cref="GenerateObjectScript"/> 於完整模型上 isolate（只 Included 該物件），等同 VS
+    /// 「結構描述比較」逐物件匯出，不會漏物件。第一次 isolate 會付出「排除其餘差異」的成本（之後僅翻轉變動者，
+    /// 極廉價），差異極多的庫此處略增耗時，但換得正確性。
+    /// </summary>
+    public CompareSession CreateIndependentSession()
     {
         var comparison = new SchemaComparison(_comparison.Source, _comparison.Target);
         Profile.CompareOptions.ApplyTo(comparison.Options, new List<string>());
-        foreach (var ex in exclusions)
-        {
-            comparison.ExcludedSourceObjects.Add(ex);
-            comparison.ExcludedTargetObjects.Add(ex);
-        }
         var result = comparison.Compare();
         return new CompareSession(Profile, comparison, result, Array.Empty<string>());
     }

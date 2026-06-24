@@ -1,6 +1,8 @@
 using ConsoleKit.Text;
+using EKSchemaDiff.Core.Config;
 using EKSchemaDiff.Core.Scripting;
 using EKSchemaDiff.Report;
+using Microsoft.SqlServer.Dac;
 
 // 離線驗證「逐物件腳本整理器」與 HTML 報告（不需連線資料庫）。
 // 模擬 DacFx 對「單一物件」GenerateScript() 的輸出：含 SQLCMD 部署樣板（:setvar / :on error）、
@@ -171,6 +173,26 @@ bool cfgRoundTrip = File.Exists(savedPath) && reread.ProjectConfig is not null &
 Console.WriteLine($"\n=== LayeredConfigStore 離線測試 ===");
 Console.WriteLine($"  探索往上層={cfgFoundProject}；全域+專案合併={cfgMerged}；存檔 round-trip={cfgRoundTrip}");
 
+// 2.8) CompareOptions.ApplyTo 安全選項對映：Drop*NotInSource 結構家族必須跟著 DropObjectsNotInSource，
+//      否則「沒勾的表」會因目標多出 default 約束而被產生 DROP CONSTRAINT（範圍外誤刪，且全域生效連單物件腳本也夾帶）。
+bool DropFamilyMatches(bool dropObjects)
+{
+    var co = new CompareOptions();
+    co.Safety.DropObjectsNotInSource = dropObjects;
+    var opt = new DacDeployOptions();
+    co.ApplyTo(opt);
+    return opt.DropObjectsNotInSource == dropObjects
+           && opt.DropConstraintsNotInSource == dropObjects
+           && opt.DropIndexesNotInSource == dropObjects
+           && opt.DropDmlTriggersNotInSource == dropObjects
+           && opt.DropStatisticsNotInSource == dropObjects
+           && opt.DropExtendedPropertiesNotInSource == dropObjects;
+}
+bool dropSafeOff = DropFamilyMatches(false);   // 安全模式：整個家族皆 false
+bool dropFamilyOn = DropFamilyMatches(true);   // 明確要刪：整個家族皆 true
+Console.WriteLine($"\n=== CompareOptions.ApplyTo Drop 家族對映 ===");
+Console.WriteLine($"  不刪(安全)全家族關閉={dropSafeOff}；要刪時全家族開啟={dropFamilyOn}");
+
 // 3) 總覽
 var overview = HtmlReportBuilder.BuildOverview(
     new[]
@@ -187,7 +209,8 @@ bool ok = f.VerificationPassed && usesOverrideDb && keptAlter && keptDesc
           && strippedSqlCmd && strippedPrint && namedAlterTable && !hasPerm && diffCount >= 1
           && fullStartsWithUse && fullNoSqlCmd && fullNoPrint && fullKeptOps && fullNoComment
           && foldHasSummary && foldIsCompact && fullKeepsAll && foldKeepsChange
-          && cfgFoundProject && cfgMerged && cfgRoundTrip;
+          && cfgFoundProject && cfgMerged && cfgRoundTrip
+          && dropSafeOff && dropFamilyOn;
 Console.WriteLine($"\n整體：{(ok ? "PASS" : "FAIL")}");
 return ok ? 0 : 1;
 

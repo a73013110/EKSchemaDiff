@@ -5,9 +5,9 @@ namespace EKSchemaDiff.Core.Config;
 /// <summary>設定檔根結構（.eksd.json）。</summary>
 public sealed class EksdConfig
 {
-    /// <summary>設定檔結構版本，供未來相容性處理。</summary>
+    /// <summary>設定檔結構版本。比對／輸出選項採分組格式（safety/comparison、deploySql/htmlReport）。</summary>
     [JsonPropertyName("version")]
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     /// <summary>未指定 --profile 且只有一組時的預設 profile 名稱。</summary>
     [JsonPropertyName("defaultProfile")]

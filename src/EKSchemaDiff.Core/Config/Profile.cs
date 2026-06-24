@@ -34,11 +34,11 @@ public sealed class Profile
 
     /// <summary>
     /// 解析部署腳本／逐物件部署檔頂端 USE 要用的資料庫名稱：
-    /// 優先用 ExportOptions.DeployDatabaseName（覆寫），否則用目標資料庫名稱。
+    /// 優先用 ExportOptions.DeploySql.DeployDatabaseName（覆寫），否則用目標資料庫名稱。
     /// </summary>
     public string ResolveDeployDatabaseName()
     {
-        var overrideName = ExportOptions.DeployDatabaseName;
+        var overrideName = ExportOptions.DeploySql.DeployDatabaseName;
         if (!string.IsNullOrWhiteSpace(overrideName)) return overrideName.Trim();
         var targetDb = Target.ResolveDatabaseName();
         return string.IsNullOrWhiteSpace(targetDb) ? "TargetDatabase" : targetDb;

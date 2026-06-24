@@ -55,8 +55,15 @@ public sealed class ExportItem
 /// </summary>
 public static class Exporter
 {
-    /// <summary>逐物件平行產生時的 worker 數（每 worker 開一個獨立比對、重抽模型）。差異多時才會啟用平行。</summary>
+    /// <summary>逐物件平行產生時的最大 worker 數（每 worker 開一個獨立比對、重抽模型）。差異多時才會啟用平行。</summary>
     private const int PerObjectWorkerCount = 3;
+
+    /// <summary>
+    /// 每個平行 worker 期望分攤的物件數：實際 worker 數＝件數∕此值（上限 <see cref="PerObjectWorkerCount"/>）。
+    /// 每開一個 worker 就多付一次昂貴的完整 model extraction，故件數少時少開、件數多才開滿，
+    /// 讓重抽成本被「夠多的逐物件產生」攤平；不足以開到 2 個 worker 時改走序列（重用主比對、零額外抽模型）。
+    /// </summary>
+    private const int ObjectsPerWorker = 4;
 
     private const string SqlGroup = "部署 SQL";
     private const string PerObjectGroup = "逐物件部署檔";
@@ -92,10 +99,10 @@ public static class Exporter
 
         var included = session.Differences.Where(d => d.Included).ToList();
 
-        bool doFull = export.FullScript;
-        bool doReverse = export.FullRollbackScript;
-        bool doPerObject = export.PerObjectScripts;
-        bool doHtml = export.ExportHtml;
+        bool doFull = export.DeploySql.FullScript;
+        bool doReverse = export.DeploySql.FullRollbackScript;
+        bool doPerObject = export.DeploySql.PerObjectScripts;
+        bool doHtml = export.HtmlReport.Enabled;
 
         // 1) 先建立完整計畫清單（所有待產生項目），供 UI 一次列出、逐項勾消。
         var items = new List<ExportItem>();
@@ -140,17 +147,18 @@ public static class Exporter
         var summaryLock = new object();
 
         // 3) 完整還原腳本：最大宗耗時，但用獨立的 SchemaComparison，與正向 _result 互不相干，
-        // 故丟背景執行緒、與「逐物件部署檔」並行產生。排除清單必須在逐物件改動納入狀態「之前」擷取。
+        // 故丟背景執行緒、與「逐物件部署檔」並行產生。部署物件名稱須在逐物件改動納入狀態「之前」於主執行緒擷取。
         Task? reverseTask = null;
         if (doReverse)
         {
-            var reverseExclusions = session.GetDeployExclusions();
+            var forwardExclusions = session.GetDeployExclusions();
+            var deployNames = session.GetDeployObjectNames();
             reverseTask = Task.Run(() =>
             {
                 cancel.ThrowIfCancellationRequested();
                 SetState(reverseItem, ExportItemState.Running);
                 var reverseScript = DeployScriptBuilder.CleanFullScript(
-                    session.GenerateReverseScript(reverseExclusions), targetDb);
+                    session.GenerateReverseScript(forwardExclusions, deployNames), targetDb);
                 if (string.IsNullOrWhiteSpace(reverseScript))
                 {
                     lock (summaryLock) summary.Warnings.Add("無法產生完整還原腳本（反向比對無結果）。");
@@ -244,14 +252,17 @@ public static class Exporter
                     return map;
                 }
 
-                int workerCount = Math.Clamp(included.Count, 1, PerObjectWorkerCount);
-                if (included.Count >= 2 * workerCount)
+                // worker 數隨件數成長：每 worker 攤 ObjectsPerWorker 個物件，上限 PerObjectWorkerCount。
+                // 只有真能開到 ≥2 個 worker（件數 ≥ 2×ObjectsPerWorker）才值得付「多份完整比對」的固定成本；
+                // 否則走序列重用主比對、零額外抽模型——避免小批量被推進「3 份完整 model extraction」的貴路徑。
+                int workerCount = Math.Clamp(included.Count / ObjectsPerWorker, 1, PerObjectWorkerCount);
+                if (workerCount >= 2)
                 {
-                    // 平行（動態派工）：固定開 workerCount 個 worker（各一條獨立連線、一個 scoped 比對，
-                    // 只含已納入物件），再從共享佇列「誰閒誰取」逐件處理 —— 避免靜態切份時「拿到大物件的
-                    // worker 累死、其他閒置」（部分樞紐物件因相依刷新，單件 GenerateScript 可達一分鐘，落點不均
-                    // 影響極大）。固定 worker 數也讓 DB 連線數可預期。排除清單沿用部署排除（未納入物件）。
-                    var exclusions = session.GetDeployExclusions();
+                    // 平行（動態派工）：固定開 workerCount 個 worker（各一條獨立連線、一份獨立的「完整」比對），
+                    // 再從共享佇列「誰閒誰取」逐件處理 —— 避免靜態切份時「拿到大物件的 worker 累死、其他閒置」
+                    // （部分樞紐物件因相依刷新，單件 GenerateScript 可達一分鐘，落點不均影響極大）。固定 worker 數
+                    // 也讓 DB 連線數可預期。各 worker 持完整模型再於其上 isolate 單一物件（見 CreateIndependentSession），
+                    // 確保被勾選的 ADD 物件不會因相依被排掉而漏產。
                     var queue = new System.Collections.Concurrent.ConcurrentQueue<ObjectDifference>(included);
 
                     var workers = new Task[workerCount];
@@ -259,7 +270,7 @@ public static class Exporter
                     {
                         workers[w] = Task.Run(() =>
                         {
-                            var worker = session.CreateScopedForwardSession(exclusions);
+                            var worker = session.CreateIndependentSession();
                             var map = MapByName(worker.Differences);
                             while (queue.TryDequeue(out var origDiff))
                             {
@@ -336,7 +347,7 @@ public static class Exporter
                 var seqText = (i + 1).ToString("D2");
                 var (html, diffCount) = HtmlReportBuilder.BuildObjectReport(
                     d.Name, action, d.SourceScript, d.TargetScript,
-                    export.HtmlIgnoreWhitespace, generatedAt);
+                    export.HtmlReport.IgnoreWhitespace, generatedAt);
 
                 var safe = DeployScriptBuilder.ConvertToSafeName(d.Name);
                 var fileName = $"{seqText}_{safe}.html";
