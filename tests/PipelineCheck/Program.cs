@@ -193,6 +193,81 @@ bool dropFamilyOn = DropFamilyMatches(true);   // 明確要刪：整個家族皆
 Console.WriteLine($"\n=== CompareOptions.ApplyTo Drop 家族對映 ===");
 Console.WriteLine($"  不刪(安全)全家族關閉={dropSafeOff}；要刪時全家族開啟={dropFamilyOn}");
 
+// 2.9) 依物件切分完整腳本（SplitFullScriptByObject）：模擬 DacFx「階段式」輸出——
+//      資料表→索引→（延後）約束→函式→預存程序→（散到最後的）擴充屬性描述。
+//      切分器應：①一檔一物件 ②把散落片段（T1 的索引/約束/描述）聚合回 T1 的檔
+//      ③檔案順序＝首次出現（T1, T2, Fn1, P1；函式在 proc 之前）④無 FK→無警告 ⑤每檔驗證通過。
+const string phasedFull = """
+USE [$(DatabaseName)];
+GO
+CREATE TABLE [dbo].[T1] (
+    [Id] INT NOT NULL,
+    [Col] INT NOT NULL,
+    CONSTRAINT [PK_T1] PRIMARY KEY CLUSTERED ([Id] ASC)
+);
+GO
+CREATE NONCLUSTERED INDEX [IX_T1_Col]
+    ON [dbo].[T1]([Col] ASC);
+GO
+CREATE TABLE [dbo].[T2] (
+    [Id] INT NOT NULL
+);
+GO
+ALTER TABLE [dbo].[T1]
+    ADD CONSTRAINT [DF_T1_Col] DEFAULT ((0)) FOR [Col];
+GO
+CREATE FUNCTION [dbo].[Fn1](@x INT) RETURNS INT AS BEGIN RETURN @x + 1; END;
+GO
+CREATE PROCEDURE [dbo].[P1] AS SELECT [dbo].[Fn1](1);
+GO
+EXECUTE sp_addextendedproperty @name = N'MS_Description', @value = N'欄位', @level0type = N'SCHEMA', @level0name = N'dbo', @level1type = N'TABLE', @level1name = N'T1', @level2type = N'COLUMN', @level2name = N'Col';
+GO
+EXECUTE sp_addextendedproperty @name = N'MS_Description', @value = N'第二表', @level0type = N'SCHEMA', @level0name = N'dbo', @level1type = N'TABLE', @level1name = N'T2';
+GO
+""";
+
+var split = DeployScriptBuilder.SplitFullScriptByObject(phasedFull, "App_PROD");
+var splitDir = Path.Combine(outDir, "逐物件切分");
+Directory.CreateDirectory(splitDir);
+foreach (var sf in split.Files) File.WriteAllText(Path.Combine(splitDir, sf.FileName), sf.Content, new System.Text.UTF8Encoding(true));
+
+var splitNames = split.Files.Select(x => DeployScriptBuilder.ConvertToSafeName(x.ObjectName)).ToList();
+var t1 = split.Files.FirstOrDefault(x => x.ObjectName.Contains("T1", StringComparison.OrdinalIgnoreCase));
+bool splitOneFilePerObject = split.Files.Count == 4;                                   // T1, T2, Fn1, P1
+bool splitOrder = splitNames.Count == 4
+                  && splitNames[0].Contains("T1") && splitNames[1].Contains("T2")
+                  && splitNames[2].Contains("Fn1") && splitNames[3].Contains("P1");    // 函式在 proc 之前
+bool t1Gathered = t1 is not null
+                  && t1.Content.Contains("CREATE TABLE [dbo].[T1]")
+                  && t1.Content.Contains("IX_T1_Col")          // 索引聚合回 T1
+                  && t1.Content.Contains("DF_T1_Col")          // 延後約束聚合回 T1
+                  && t1.Content.Contains("@level1name = N'T1'") // 散到最後的描述聚合回 T1
+                  && t1.OperationBatchCount == 4;
+bool t1NoBleed = t1 is not null
+                 && !t1.Content.Contains("[dbo].[T2]")         // 不夾帶別的物件
+                 && !t1.Content.Contains("[dbo].[P1]")
+                 && !t1.Content.Contains("[dbo].[Fn1]");
+bool splitAllVerified = split.Files.All(x => x.VerificationPassed);
+bool splitNoWarnings = split.Warnings.Count == 0;
+Console.WriteLine($"\n=== 依物件切分 SplitFullScriptByObject ===");
+Console.WriteLine($"  一檔一物件={splitOneFilePerObject}；順序(函式先於proc)={splitOrder}；" +
+                  $"T1聚合散落片段={t1Gathered}；T1不夾帶他物件={t1NoBleed}；全部驗證通過={splitAllVerified}；無警告={splitNoWarnings}");
+
+// 2.10) 跨表外鍵前向參照：子表(T2)外鍵指向更後面才建立的 T3 → 應產生警告（不靜默產壞腳本）。
+const string fkForward = """
+USE [$(DatabaseName)];
+GO
+CREATE TABLE [dbo].[T2] ([Id] INT NOT NULL, [T3Id] INT NULL);
+GO
+ALTER TABLE [dbo].[T2] ADD CONSTRAINT [FK_T2_T3] FOREIGN KEY ([T3Id]) REFERENCES [dbo].[T3] ([Id]);
+GO
+CREATE TABLE [dbo].[T3] ([Id] INT NOT NULL CONSTRAINT [PK_T3] PRIMARY KEY);
+GO
+""";
+var fkSplit = DeployScriptBuilder.SplitFullScriptByObject(fkForward, "App_PROD");
+bool fkWarned = fkSplit.Warnings.Any(w => w.Contains("外鍵") && w.Contains("t3"));
+Console.WriteLine($"  跨表外鍵前向參照偵測警告={fkWarned}");
+
 // 3) 總覽
 var overview = HtmlReportBuilder.BuildOverview(
     new[]
@@ -210,7 +285,9 @@ bool ok = f.VerificationPassed && usesOverrideDb && keptAlter && keptDesc
           && fullStartsWithUse && fullNoSqlCmd && fullNoPrint && fullKeptOps && fullNoComment
           && foldHasSummary && foldIsCompact && fullKeepsAll && foldKeepsChange
           && cfgFoundProject && cfgMerged && cfgRoundTrip
-          && dropSafeOff && dropFamilyOn;
+          && dropSafeOff && dropFamilyOn
+          && splitOneFilePerObject && splitOrder && t1Gathered && t1NoBleed && splitAllVerified && splitNoWarnings
+          && fkWarned;
 Console.WriteLine($"\n整體：{(ok ? "PASS" : "FAIL")}");
 return ok ? 0 : 1;
 

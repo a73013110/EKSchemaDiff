@@ -11,9 +11,18 @@ public sealed class ObjectScriptFile
     public string FileName { get; init; } = "";
     public string Content { get; init; } = "";
     public int OperationBatchCount { get; init; }
+    /// <summary>所屬物件的正規化名稱（schema.object，小寫無括號），供呼叫端與差異清單對映。</summary>
+    public string OwnerKey { get; init; } = "";
     /// <summary>清理後的操作批次是否與來源（DacFx 原始腳本）一致（內容不增不減不改）。</summary>
     public bool VerificationPassed { get; init; }
     public string? VerificationMessage { get; init; }
+}
+
+/// <summary>把完整部署腳本依物件切分的結果：一檔一物件（依建立順序），加上需提醒使用者的警告。</summary>
+public sealed class SplitResult
+{
+    public IReadOnlyList<ObjectScriptFile> Files { get; init; } = Array.Empty<ObjectScriptFile>();
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -54,11 +63,22 @@ public static partial class DeployScriptBuilder
     [GeneratedRegex(@"(?im)sp_(?<Op>add|update|drop)extendedproperty\b")]
     private static partial Regex ExtPropOp();
 
+    [GeneratedRegex(@"(?im)@level0name\s*=\s*N?'(?<v>[^']+)'")]
+    private static partial Regex Level0Name();
+
     [GeneratedRegex(@"(?im)@level1name\s*=\s*N?'(?<v>[^']+)'")]
     private static partial Regex Level1Name();
 
     [GeneratedRegex(@"(?im)@level2name\s*=\s*N?'(?<v>[^']+)'")]
     private static partial Regex Level2Name();
+
+    // 索引的「擁有者」是 ON 子句的資料表，不是索引名本身（故須先於一般 DDL 比對）。
+    [GeneratedRegex(@"(?i)^\s*CREATE\s+(?:UNIQUE\s+)?(?:(?:NON)?CLUSTERED\s+)?INDEX\s+[\s\S]+?\bON\s+(?<tbl>(?:\[[^\]\r\n]+\]|[A-Za-z0-9_#$@]+)(?:\s*\.\s*(?:\[[^\]\r\n]+\]|[A-Za-z0-9_#$@]+))?)")]
+    private static partial Regex IndexOnTable();
+
+    // 外鍵指向的資料表（用於偵測跨表前向參照）。
+    [GeneratedRegex(@"(?i)\bREFERENCES\s+(?<tbl>(?:\[[^\]\r\n]+\]|[A-Za-z0-9_#$@]+)(?:\s*\.\s*(?:\[[^\]\r\n]+\]|[A-Za-z0-9_#$@]+))?)")]
+    private static partial Regex FkReferences();
 
     private static string NormalizeCrLf(string text) =>
         text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", CrLf);
@@ -103,6 +123,7 @@ public static partial class DeployScriptBuilder
             FileName = fileName,
             Content = content,
             OperationBatchCount = operationBatches.Count,
+            OwnerKey = CanonName(name),
             VerificationPassed = verified,
             VerificationMessage = message,
         };
@@ -118,6 +139,132 @@ public static partial class DeployScriptBuilder
         var (sessionSetup, operationBatches) = PartitionBatches(fullScript);
         return Compose(databaseName, sessionSetup, operationBatches);
     }
+
+    /// <summary>
+    /// 把「完整部署腳本」依所屬物件切分成多個乾淨單檔（一檔一物件），保留完整腳本的權威拓樸順序。
+    ///
+    /// 為什麼不再用 DacFx「逐物件 GenerateScript」獨立重產：那會為了讓單檔可獨立部署而<b>夾帶前置相依物件</b>
+    /// （例如某 proc 的檔內含它依賴的資料表＋函式），造成跨檔重複、照檔名順序執行時撞「物件已存在」；
+    /// 且檔案順序跟完整腳本的相依拓樸序脫鉤（如函式被排到所有 proc 之後）。
+    ///
+    /// 改法：完整腳本本身已是 DacFx 拓樸排序、每物件只出現一次、與 VS 逐行一致。但它是<b>階段式</b>輸出
+    /// （資料表→約束→程式化物件→擴充屬性），同一物件的片段散在各階段。本方法掃描每個 <c>GO</c> 批次、
+    /// 判定其所屬物件（DDL 名稱／索引的 ON 資料表／擴充屬性的 level0+level1），把同一物件的所有批次
+    /// （本體＋索引＋自身約束＋欄位描述）<b>聚合回它自己的單檔</b>，檔案順序＝物件在完整腳本中「首次出現」
+    /// （即建立順序）。如此一檔一物件、不重複、不夾帶、照檔名順序執行即等價於完整腳本。
+    ///
+    /// 唯一無法兼顧「一檔一物件」與「照順序可執行」的情形是<b>跨表外鍵的前向參照／循環</b>
+    /// （子表檔排在父表檔之前）——這是 SQL Server 本身也須靠延後約束才能解的死結，故僅偵測並警告，不靜默產生壞腳本。
+    /// </summary>
+    public static SplitResult SplitFullScriptByObject(string fullScript, string databaseName)
+    {
+        var warnings = new List<string>();
+        var (sessionSetup, operationBatches) = PartitionBatches(fullScript);
+
+        var order = new List<string>();                                  // 物件 key，依首次出現
+        var groups = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var display = new Dictionary<string, string>(StringComparer.Ordinal);
+        string? lastKey = null;
+        int unattributed = 0;
+
+        foreach (var batch in operationBatches)
+        {
+            string key, name;
+            if (OwnerOf(batch) is { } o) { key = o.Key; name = o.Display; }
+            else if (lastKey is not null) { key = lastKey; name = display[lastKey]; unattributed++; }
+            else { key = "__前置__"; name = "前置批次"; unattributed++; }
+
+            if (!groups.TryGetValue(key, out var list))
+            {
+                list = new List<string>();
+                groups[key] = list;
+                display[key] = name;
+                order.Add(key);
+            }
+            list.Add(batch);
+            lastKey = key;
+        }
+
+        // 跨表外鍵前向參照偵測：FK 指向的物件若排在更後面的檔，照檔名順序執行時該外鍵會失敗。
+        var indexOfKey = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < order.Count; i++) indexOfKey[order[i]] = i;
+        foreach (var key in order)
+            foreach (var batch in groups[key])
+            {
+                var target = ForeignKeyTarget(batch);
+                if (target is not null && indexOfKey.TryGetValue(target, out var ti) && ti > indexOfKey[key])
+                    warnings.Add($"{display[key]} 有外鍵參照 {target}，但後者排在更後面的檔；" +
+                                 "照檔名順序執行時該外鍵會失敗（請手動把此外鍵約束移到結尾再執行）。");
+            }
+        if (unattributed > 0)
+            warnings.Add($"有 {unattributed} 個批次無法判定所屬物件，已併入相鄰物件的檔案。");
+
+        var files = new List<ObjectScriptFile>();
+        foreach (var key in order)
+        {
+            var ops = groups[key];
+            var content = Compose(databaseName, sessionSetup, ops);
+            var (action, type, name) = DetectMetadata(ops, display[key]);
+            var fileName = $"{action}_{type}_{ConvertToSafeName(name)}.sql";
+            var (verified, message) = Verify(content, sessionSetup, ops, databaseName);
+            files.Add(new ObjectScriptFile
+            {
+                Action = action, ObjectType = type, ObjectName = name, FileName = fileName,
+                Content = content, OperationBatchCount = ops.Count, OwnerKey = key,
+                VerificationPassed = verified, VerificationMessage = message,
+            });
+        }
+
+        // 完整性防線：所有分檔的批次加總必須＝完整腳本的操作批次數（一個不多、一個不少、不重複）。
+        // 由「每批次只進一組」保證恆等，但顯式檢查可在未來怪異輸入或程式回歸時明確告警，不靜默出錯。
+        int emitted = files.Sum(f => f.OperationBatchCount);
+        if (emitted != operationBatches.Count)
+            warnings.Add($"切分批次數（{emitted}）與完整腳本（{operationBatches.Count}）不符，請檢查切分邏輯。");
+
+        return new SplitResult { Files = files, Warnings = warnings };
+    }
+
+    /// <summary>
+    /// 判定一個批次所屬的物件：(canonical key, 顯示名)。判不出回 null（交由呼叫端併入相鄰物件）。
+    /// 順序很重要——索引須先於一般 DDL 判定（索引的擁有者是 ON 的資料表，不是索引名）。
+    /// </summary>
+    private static (string Key, string Display)? OwnerOf(string batch)
+    {
+        var idx = IndexOnTable().Match(batch);
+        if (idx.Success) { var t = idx.Groups["tbl"].Value.Trim(); return (CanonName(t), t); }
+
+        var ddl = DdlMatch().Match(batch);
+        if (ddl.Success && !string.Equals(ddl.Groups["Type"].Value.Trim(), "INDEX", StringComparison.OrdinalIgnoreCase))
+        {
+            var nm = ddl.Groups["Name"].Value.Trim();
+            return (CanonName(nm), nm);
+        }
+
+        if (ExtPropOp().IsMatch(batch))
+        {
+            var l1 = Level1Name().Match(batch);
+            if (l1.Success)
+            {
+                var l0 = Level0Name().Match(batch);
+                var raw = (l0.Success ? l0.Groups["v"].Value + "." : "") + l1.Groups["v"].Value;
+                var disp = (l0.Success ? $"[{l0.Groups["v"].Value}]." : "") + $"[{l1.Groups["v"].Value}]";
+                return (CanonName(raw), disp);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>批次若為外鍵約束，回傳其指向的資料表 canonical key；否則 null。</summary>
+    private static string? ForeignKeyTarget(string batch)
+    {
+        if (!batch.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase)) return null;
+        var m = FkReferences().Match(batch);
+        return m.Success ? CanonName(m.Groups["tbl"].Value.Trim()) : null;
+    }
+
+    /// <summary>物件名正規化：去括號／空白、統一點號、轉小寫，作為跨物件比對／對映的 key。</summary>
+    public static string CanonName(string n) =>
+        Regex.Replace(Regex.Replace(n, @"[\[\]\s]", ""), @"\s*\.\s*", ".").ToLowerInvariant();
 
     /// <summary>
     /// 把 DacFx 腳本拆成（必要 SET 批次, 真正的操作批次）；

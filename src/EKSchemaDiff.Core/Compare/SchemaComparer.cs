@@ -32,13 +32,13 @@ public sealed class SchemaComparer
 /// <summary>一次比對的結果與後續操作（勾選、預覽、產生腳本）。</summary>
 public sealed class CompareSession
 {
-    // 非 readonly：ApplyInclusion 會以「比對前排除 + 重比」取代逐筆翻轉，過程中整組替換。
+    // 非 readonly：CommitInclusion 會以「比對前排除 + 重比」的結果整組替換。
     private SchemaComparison _comparison;
     private SchemaComparisonResult _result;
     private List<ObjectDifference> _differences;
 
-    // 部署排除清單（未納入物件的識別）：ApplyInclusion 重比時記下，供還原腳本與逐物件平行重用，
-    // 避免重新從（已縮小的）差異清單推導。未經 ApplyInclusion（如非互動全量）時為 null。
+    // 部署排除清單（未納入物件的識別）：CommitInclusion 重比時記下，供還原腳本重用，
+    // 避免重新從（已縮小的）差異清單推導。未經勾選提交（如非互動全量）時為 null。
     private IReadOnlyList<SchemaComparisonExcludedObjectId>? _deployExclusions;
 
     // 使用者親自勾選的物件名稱（CommitInclusion 時記下）：供區分「勾選」與「相依自動補入」。null = 未經勾選流程。
@@ -138,15 +138,12 @@ public sealed class CompareSession
         _pickedNames = resolved.PickedNames;
     }
 
-    /// <summary>套用勾選（解析並立即提交）。非互動匯出用；互動流程改用 ResolveInclusion + 確認 + CommitInclusion。</summary>
-    public void ApplyInclusion(ISet<ObjectDifference> include) => CommitInclusion(ResolveInclusion(include));
-
     /// <summary>此差異是否為使用者親自勾選（否則為相依自動補入）；未經勾選流程（如非互動全量）時一律視為勾選。</summary>
     public bool WasPicked(ObjectDifference d) => _pickedNames is null || _pickedNames.Contains(d.Name);
 
     /// <summary>
-    /// 取得「部署排除清單」（未納入部署的物件識別），供 ResolveInclusion 重比失敗的 fallback 重推。
-    /// ApplyInclusion 重比後直接重用其記錄；未經 ApplyInclusion 時，依目前差異的納入狀態即時推導。
+    /// 取得「部署排除清單」（未納入部署的物件識別），供還原腳本比對前排除、與 ResolveInclusion 重比失敗的 fallback 重推。
+    /// CommitInclusion 重比後直接重用其記錄；未經提交時，依目前差異的納入狀態即時推導。
     /// </summary>
     public IReadOnlyList<SchemaComparisonExcludedObjectId> GetDeployExclusions()
         => _deployExclusions ?? BuildExclusionsExcept(
@@ -278,45 +275,6 @@ public sealed class CompareSession
             }
             if (!changed) break;
         }
-    }
-
-    /// <summary>
-    /// 平行逐物件用：建立獨立的「完整」正向比對工作階段（重連資料庫、重新比對全部物件）。
-    /// 與本階段及其他 worker 各持獨立的 SchemaComparison/Result，互不干擾，可在背景執行緒呼叫。
-    /// 重用既有端點（連線字串已建立），不會再次詢問密碼。
-    ///
-    /// 刻意「不」於比對前以 ExcludedSourceObjects 縮小模型：舊作法會把「被勾選 ADD 物件所相依、但未被勾選」
-    /// 的物件一併從來源模型移除，導致該 ADD 物件在比對結果中消失（map 找不到名稱）、逐物件腳本被誤判
-    /// 「無法產生」而 0.0s 略過。改持完整模型後，每個被勾選物件都必然存在、相依皆可解析；要產生單物件腳本時
-    /// 再以 <see cref="GenerateObjectScript"/> 於完整模型上 isolate（只 Included 該物件），等同 VS
-    /// 「結構描述比較」逐物件匯出，不會漏物件。第一次 isolate 會付出「排除其餘差異」的成本（之後僅翻轉變動者，
-    /// 極廉價），差異極多的庫此處略增耗時，但換得正確性。
-    /// </summary>
-    public CompareSession CreateIndependentSession()
-    {
-        var comparison = new SchemaComparison(_comparison.Source, _comparison.Target);
-        Profile.CompareOptions.ApplyTo(comparison.Options, new List<string>());
-        var result = comparison.Compare();
-        return new CompareSession(Profile, comparison, result, Array.Empty<string>());
-    }
-
-    /// <summary>
-    /// 逐物件產生官方部署腳本：只納入「該物件」，由 DacFx 官方引擎產生只含該物件變更
-    /// （含其描述、相依模組刷新等，皆由引擎決定）的腳本——等同 VS「結構描述比較」中只勾一個物件再匯出。
-    /// 會改動納入狀態；一批處理完請呼叫 <see cref="RestoreInclusion"/> 還原。
-    /// </summary>
-    public string GenerateObjectScript(ObjectDifference only)
-    {
-        SetInclusion(d => ReferenceEquals(d, only));
-        try { return _result.GenerateScript(Profile.ResolveDeployDatabaseName()).Script ?? string.Empty; }
-        catch { return string.Empty; }
-    }
-
-    /// <summary>把納入狀態還原為指定集合（逐物件產生腳本後呼叫）。</summary>
-    public void RestoreInclusion(IReadOnlyCollection<ObjectDifference> included)
-    {
-        var set = new HashSet<ObjectDifference>(included);
-        SetInclusion(set.Contains);
     }
 
     private void SetInclusion(Func<ObjectDifference, bool> shouldInclude)
